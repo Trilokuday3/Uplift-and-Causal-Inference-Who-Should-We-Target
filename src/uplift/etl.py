@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -108,3 +110,43 @@ def assert_balanced(balance_df: pd.DataFrame, threshold: float = 0.1) -> None:
         raise CovariateBalanceFailed(
             f"Covariate balance check failed for: {violations['feature'].tolist()} (SMD >= {threshold})"
         )
+
+
+def stratified_split(
+    df: DataFrame,
+    treatment_col: str = TREATMENT_COL,
+    outcome_col: str = VISIT_COL,
+    seed: int = 42,
+    ratios: tuple[float, float, float] = (0.6, 0.2, 0.2),
+) -> tuple[DataFrame, DataFrame, DataFrame]:
+    assert abs(sum(ratios) - 1.0) < 1e-9, "ratios must sum to 1.0"
+    train_cut = ratios[0] * 100
+    val_cut = (ratios[0] + ratios[1]) * 100
+
+    bucketed = df.withColumn("_row_id", F.monotonically_increasing_id()).withColumn(
+        "_bucket", F.pmod(F.hash(F.col("_row_id"), F.lit(seed)), F.lit(100))
+    )
+    train_df = bucketed.filter(F.col("_bucket") < train_cut).drop("_row_id", "_bucket")
+    val_df = bucketed.filter((F.col("_bucket") >= train_cut) & (F.col("_bucket") < val_cut)).drop(
+        "_row_id", "_bucket"
+    )
+    test_df = bucketed.filter(F.col("_bucket") >= val_cut).drop("_row_id", "_bucket")
+    return train_df, val_df, test_df
+
+
+def write_split_meta(
+    splits: dict[str, DataFrame],
+    seed: int,
+    output_path: str,
+    treatment_col: str = TREATMENT_COL,
+    outcome_col: str = VISIT_COL,
+) -> dict:
+    meta = {"seed": seed, "splits": {}}
+    for name, split_df in splits.items():
+        n = split_df.count()
+        treat_rate = split_df.filter(F.col(treatment_col) == 1).count() / n
+        outcome_rate = split_df.filter(F.col(outcome_col) == 1).count() / n
+        meta["splits"][name] = {"n_rows": n, "treatment_rate": treat_rate, "outcome_rate": outcome_rate}
+    with open(output_path, "w") as f:
+        json.dump(meta, f, indent=2)
+    return meta

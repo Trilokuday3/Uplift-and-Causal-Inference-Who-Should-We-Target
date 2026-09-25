@@ -1,4 +1,5 @@
 import pytest
+from pyspark.sql import functions as F
 
 
 def test_write_parquet_round_trips_row_count(spark, tmp_path, synthetic_criteo_pandas):
@@ -78,3 +79,66 @@ def test_covariate_balance_detects_violation(spark, synthetic_criteo_pandas):
     assert balance_df.loc[balance_df["feature"] == "f0", "smd"].iloc[0] >= 0.1
     with pytest.raises(CovariateBalanceFailed):
         assert_balanced(balance_df)
+
+
+def test_split_ratios_are_approximately_correct(spark, synthetic_criteo_pandas):
+    from uplift.etl import stratified_split
+
+    pdf = synthetic_criteo_pandas(n=50_000)
+    sdf = spark.createDataFrame(pdf)
+
+    train, val, test = stratified_split(sdf, seed=42)
+    n = sdf.count()
+
+    assert abs(train.count() / n - 0.6) < 0.02
+    assert abs(val.count() / n - 0.2) < 0.02
+    assert abs(test.count() / n - 0.2) < 0.02
+
+
+def test_split_is_stratified_on_treatment_and_visit(spark, synthetic_criteo_pandas):
+    from uplift.etl import stratified_split
+
+    pdf = synthetic_criteo_pandas(n=50_000)
+    sdf = spark.createDataFrame(pdf)
+    full_treat_rate = pdf["treatment"].mean()
+    full_visit_rate = pdf["visit"].mean()
+
+    train, val, test = stratified_split(sdf, seed=42)
+
+    for split_df in (train, val, test):
+        n = split_df.count()
+        treat_rate = split_df.filter(F.col("treatment") == 1).count() / n
+        visit_rate = split_df.filter(F.col("visit") == 1).count() / n
+        assert abs(treat_rate - full_treat_rate) < 0.02
+        assert abs(visit_rate - full_visit_rate) < 0.02
+
+
+def test_split_determinism(spark, synthetic_criteo_pandas):
+    from uplift.etl import stratified_split
+
+    pdf = synthetic_criteo_pandas(n=10_000)
+    sdf = spark.createDataFrame(pdf)
+
+    train1, val1, test1 = stratified_split(sdf, seed=42)
+    train2, val2, test2 = stratified_split(sdf, seed=42)
+
+    assert train1.count() == train2.count()
+    assert val1.count() == val2.count()
+    assert test1.count() == test2.count()
+
+
+def test_write_split_meta(spark, tmp_path, synthetic_criteo_pandas):
+    from uplift.etl import stratified_split, write_split_meta
+    import json
+
+    pdf = synthetic_criteo_pandas(n=10_000)
+    sdf = spark.createDataFrame(pdf)
+    train, val, test = stratified_split(sdf, seed=42)
+    out_path = str(tmp_path / "split_meta.json")
+
+    meta = write_split_meta({"train": train, "val": val, "test": test}, seed=42, output_path=out_path)
+
+    assert meta["seed"] == 42
+    assert set(meta["splits"].keys()) == {"train", "val", "test"}
+    with open(out_path) as f:
+        assert json.load(f) == meta
