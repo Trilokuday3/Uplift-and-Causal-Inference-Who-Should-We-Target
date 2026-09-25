@@ -171,9 +171,12 @@ def main() -> None:
     builder = SparkSession.builder.appName("uplift-ab-test")
     for key, value in LOCAL_SPARK_CONFIG.items():
         builder = builder.config(key, value)
-    # toPandas() on the full dataset needs more than Spark local mode's 1g default driver
-    # heap; this is the CLI's real-data path, not the test fixture, so scoped here only.
+    # toPandas() on the full dataset needs more than Spark local mode's defaults: a 1g
+    # driver heap (OOM'd first) and a 1g spark.driver.maxResultSize (result was 1137MB,
+    # exceeded it next). This is the CLI's real-data path, not the test fixture, so
+    # scoped here only.
     builder = builder.config("spark.driver.memory", "8g")
+    builder = builder.config("spark.driver.maxResultSize", "4g")
     spark = builder.getOrCreate()
     try:
         pdf = spark.read.parquet(f"{args.input_dir}/full").toPandas()
