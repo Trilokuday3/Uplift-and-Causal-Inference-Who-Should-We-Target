@@ -52,3 +52,18 @@ def synthetic_criteo_pandas():
         )
 
     return _make
+
+
+@pytest.fixture
+def uplift_frame():
+    def _make(n: int = 1500, seed: int = 0) -> pd.DataFrame:
+        rng = np.random.default_rng(seed)
+        features = {f"f{i}": rng.normal(size=n) for i in range(12)}
+        treatment = rng.binomial(1, 0.5, size=n)
+        effect = np.where(features["f0"] > 0, 0.25, -0.05)
+        visit_p = np.clip(0.10 + treatment * effect, 0.001, 0.99)
+        visit = rng.binomial(1, visit_p)
+        exposure = np.where(treatment == 1, rng.binomial(1, 0.9, size=n), 0)
+        return pd.DataFrame({**features, "treatment": treatment, "visit": visit, "exposure": exposure})
+
+    return _make
