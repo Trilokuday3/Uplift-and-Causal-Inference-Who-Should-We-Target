@@ -1,8 +1,11 @@
 from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StructField, StructType
+from scipy import stats
 
 from uplift.constants import (
     CONVERSION_COL,
+    EXPECTED_TREATMENT_RATE,
     EXPOSURE_COL,
     FEATURE_COLS,
     TREATMENT_COL,
@@ -43,3 +46,36 @@ def write_parquet(spark: SparkSession, df: DataFrame, output_path: str) -> dict:
     if rows_out != rows_in:
         raise ValueError(f"Row count mismatch after Parquet write: {rows_in} in, {rows_out} out")
     return {"rows_in": rows_in, "rows_out": rows_out}
+
+
+def compute_srm(
+    df: DataFrame,
+    treatment_col: str = TREATMENT_COL,
+    expected_treatment_rate: float = EXPECTED_TREATMENT_RATE,
+) -> dict:
+    n_total = df.count()
+    n_treated = df.filter(F.col(treatment_col) == 1).count()
+    n_control = n_total - n_treated
+    expected_treated = n_total * expected_treatment_rate
+    expected_control = n_total * (1 - expected_treatment_rate)
+    chi2, p_value = stats.chisquare(
+        f_obs=[n_treated, n_control], f_exp=[expected_treated, expected_control]
+    )
+    return {
+        "n_total": n_total,
+        "n_treated": n_treated,
+        "n_control": n_control,
+        "observed_treatment_rate": n_treated / n_total,
+        "expected_treatment_rate": expected_treatment_rate,
+        "chi2": float(chi2),
+        "p_value": float(p_value),
+    }
+
+
+def assert_srm_ok(srm_result: dict, alpha: float = 0.01) -> None:
+    if srm_result["p_value"] <= alpha:
+        raise SRMCheckFailed(
+            f"SRM check failed: p={srm_result['p_value']:.4f} <= {alpha}. "
+            f"Observed treatment rate {srm_result['observed_treatment_rate']:.4f} vs "
+            f"expected {srm_result['expected_treatment_rate']:.4f}."
+        )
