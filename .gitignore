@@ -1,2 +1,10 @@
 CLAUDE.md
 .worktrees/
+data/
+*.pyc
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+venv/
