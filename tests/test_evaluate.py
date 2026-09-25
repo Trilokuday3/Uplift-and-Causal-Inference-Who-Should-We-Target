@@ -123,3 +123,18 @@ def test_segment_table_default_band_populates_all_four_segments_when_scores_are_
     table = segment_table(scored["y"], scored["t"], shifted, scored["noise"])
     assert (table["n"] > 0).all()
     assert table["share"].max() < 0.8
+
+
+def test_bootstrap_ci_reports_paired_difference_against_reference(scored):
+    result = bootstrap_qini_ci(
+        scored["y"],
+        scored["t"],
+        {"oracle": scored["oracle"], "noise": scored["noise"]},
+        n_boot=60,
+        seed=1,
+        reference="noise",
+    )
+    diff = result["oracle"]["diff_vs_reference"]
+    assert diff["ci_low"] > 0
+    assert diff["ci_low"] <= diff["estimate"] <= diff["ci_high"]
+    assert "diff_vs_reference" not in result["noise"]

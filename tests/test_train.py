@@ -98,3 +98,9 @@ def test_tune_model_signature_has_no_test_frame():
 
     params = inspect.signature(tune_model).parameters
     assert not any("test" in p for p in params)
+
+
+def test_subsample_is_shuffled_not_grouped_by_stratum(uplift_frame):
+    sampled = stratified_subsample(uplift_frame(5000, seed=6), 2000, seed=1)
+    head = sampled.head(200)
+    assert head["treatment"].nunique() == 2 and head["visit"].nunique() == 2

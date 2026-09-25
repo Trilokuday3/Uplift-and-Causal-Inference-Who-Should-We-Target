@@ -122,7 +122,12 @@ class ClassTransformationModel:
         self.model = ClassTransformation(estimator=_classifier(seed, params))
 
     def fit(self, X, treatment, y):
-        self.model.fit(X, y, treatment)
+        # The class-transformation target is only a valid uplift estimator when treated and
+        # control carry equal mass (50/50). Criteo is 85/15, so reweight each arm to half the mass.
+        treatment = np.asarray(treatment)
+        p = treatment.mean()
+        weights = np.where(treatment == 1, 0.5 / p, 0.5 / (1 - p))
+        self.model.fit(X, y, treatment, estimator_fit_params={"sample_weight": weights})
         return self
 
     def predict_uplift(self, X):

@@ -56,3 +56,25 @@ def test_train_cli_end_to_end(tmp_path, uplift_frame):
     for run in runs:
         assert "qini_auc" in run.data.metrics
         assert "exposure" not in " ".join(run.data.params)
+
+
+def test_train_cli_reports_paired_difference_against_response_model(tmp_path, uplift_frame):
+    input_dir = _write_splits(tmp_path, uplift_frame)
+    out_path = tmp_path / "uplift_results.json"
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "uplift.train",
+            "--input-dir", str(input_dir), "--output", str(out_path),
+            "--models", "response_model,s_learner", "--sample-size", "1500",
+            "--n-trials", "1", "--n-boot", "20",
+            "--mlflow-uri", "sqlite:///" + (tmp_path / "mlflow.db").as_posix(),
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": "src", "MLFLOW_DISABLE_AGENT_HINT": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    results = json.loads(out_path.read_text())
+    assert results["reference_model"] == "response_model"
+    assert set(results["test_metrics"]["s_learner"]["diff_vs_reference"]) == {"estimate", "ci_low", "ci_high"}
+    assert "untuned_val_metrics" in results

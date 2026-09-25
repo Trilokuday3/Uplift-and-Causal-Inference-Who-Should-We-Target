@@ -62,3 +62,20 @@ def test_uplift_model_is_directionally_correct(name, uplift_frame):
     high = scores[(test["f0"] > 0.5).to_numpy()].mean()
     low = scores[(test["f0"] < -0.5).to_numpy()].mean()
     assert high > low
+
+
+def test_class_transformation_ranks_by_effect_not_baseline_under_85_15_split():
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    n = 20000
+    X = pd.DataFrame({f"f{i}": rng.normal(size=n) for i in range(12)})
+    t = rng.binomial(1, 0.85, size=n)
+    baseline = 0.05 + 0.4 * (X["f1"] > 0)  # response depends on f1 only
+    effect = 0.15 * (X["f0"] > 0)  # uplift depends on f0 only
+    y = rng.binomial(1, np.clip(baseline + t * effect, 0, 1))
+
+    scores = build_model("class_transformation", seed=0).fit(X, t, y).predict_uplift(X)
+    corr_effect = np.corrcoef(scores, (X["f0"] > 0).astype(float))[0, 1]
+    corr_baseline = np.corrcoef(scores, (X["f1"] > 0).astype(float))[0, 1]
+    assert corr_effect > abs(corr_baseline)

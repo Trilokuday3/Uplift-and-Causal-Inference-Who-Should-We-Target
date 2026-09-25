@@ -28,12 +28,13 @@ def load_split(input_dir: str | Path, name: str) -> pd.DataFrame:
 
 
 def stratified_subsample(df: pd.DataFrame, n: int, seed: int, outcome_col: str = VISIT_COL) -> pd.DataFrame:
-    if n >= len(df):
-        return df
-    sampled = df.groupby([TREATMENT_COL, outcome_col], group_keys=False).sample(
-        frac=n / len(df), random_state=seed
-    )
-    return sampled.reset_index(drop=True)
+    # groupby.sample returns rows grouped by stratum, so always shuffle before handing rows to
+    # learners that fold or bag in row order.
+    if n < len(df):
+        df = df.groupby([TREATMENT_COL, outcome_col], group_keys=False).sample(
+            frac=n / len(df), random_state=seed
+        )
+    return df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
 def fit_all(df: pd.DataFrame, outcome_col: str, seed: int, names: list[str] | None = None) -> dict:
@@ -144,6 +145,7 @@ def run(
     for name, metrics in val_metrics.items():
         log_run(name, {**base_params, "stage": "untuned_val"}, metrics, tracking_uri)
 
+    untuned_val_metrics = {n: dict(m) for n, m in val_metrics.items()}
     candidates = sorted((n for n in names if n in SEARCH_SPACES), key=lambda n: -val_metrics[n]["qini_auc"])
     tuned_params: dict[str, dict] = {}
     for name in candidates[:2]:
@@ -162,12 +164,15 @@ def run(
         log_run(name, {**base_params, "stage": "final_test", "n_test": len(test)}, metrics, tracking_uri)
 
     best = max(candidates, key=lambda n: val_metrics[n]["qini_auc"]) if candidates else None
-    ci = bootstrap_qini_ci(y_test, t_test, test_scores, n_boot=n_boot, seed=seed)
+    reference = "response_model" if "response_model" in test_scores else None
+    ci = bootstrap_qini_ci(y_test, t_test, test_scores, n_boot=n_boot, seed=seed, reference=reference)
 
     results = {
         "outcome": outcome_col,
         "sizes": {"train": len(train), "val": len(val), "test": len(test)},
         "best_model": best,
+        "reference_model": reference,
+        "untuned_val_metrics": untuned_val_metrics,
         "tuned_params": tuned_params,
         "val_metrics": val_metrics,
         "test_metrics": {n: {**test_metrics[n], **ci[n]} for n in test_metrics},

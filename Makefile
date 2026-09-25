@@ -10,5 +10,8 @@ data:
 ab-test:
 	python -m uplift.ab_test --input-dir $(PROCESSED_DIR) --output docs/ab_test_results.json
 
+train:
+	python -m uplift.train --input-dir $(PROCESSED_DIR) --output docs/uplift_results.json
+
 test:
 	pytest tests/ -v

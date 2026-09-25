@@ -110,9 +110,11 @@ def bootstrap_qini_ci(
     n_boot: int = 200,
     seed: int = 42,
     alpha: float = 0.05,
-) -> dict[str, dict[str, float]]:
+    reference: str | None = None,
+) -> dict[str, dict]:
     """Percentile bootstrap of Qini AUC. All models share each resample, so differences between
-    models are paired. Resamples missing a treated or control row are skipped."""
+    models are paired. Resamples missing a treated or control row are skipped. With `reference`,
+    each other model also gets `diff_vs_reference`: the paired AUC difference and its CI."""
     y = np.asarray(y)
     treatment = np.asarray(treatment)
     scores_by_model = {k: np.asarray(v, dtype=float) for k, v in scores_by_model.items()}
@@ -136,4 +138,16 @@ def bootstrap_qini_ci(
             raise ValueError("Every bootstrap resample lacked a treated row, a control row, or both outcome classes")
         low, high = np.percentile(draws[name], [100 * alpha / 2, 100 * (1 - alpha / 2)])
         result[name] = {"auc": qini_auc(y, treatment, scores), "ci_low": float(low), "ci_high": float(high)}
+    if reference is not None:
+        ref_draws = np.asarray(draws[reference])
+        for name, scores in scores_by_model.items():
+            if name == reference:
+                continue
+            diffs = np.asarray(draws[name]) - ref_draws
+            low, high = np.percentile(diffs, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+            result[name]["diff_vs_reference"] = {
+                "estimate": result[name]["auc"] - result[reference]["auc"],
+                "ci_low": float(low),
+                "ci_high": float(high),
+            }
     return result
