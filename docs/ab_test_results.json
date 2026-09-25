@@ -49,7 +49,10 @@
       },
       "variance_before": 0.044783755964928444,
       "variance_after": 0.03223973616077592,
-      "variance_reduction_pct": 28.010200426190558
+      "variance_reduction_pct": 28.010200426190558,
+      "adjusted_ate": 0.006979598240179782,
+      "adjusted_ci_low": 0.006731549099358982,
+      "adjusted_ci_high": 0.007227647381000583
     }
   },
   "conversion": {
@@ -102,7 +105,10 @@
       },
       "variance_before": 0.00290817344221044,
       "variance_after": 0.0025622838456398284,
-      "variance_reduction_pct": 11.893705910047391
+      "variance_reduction_pct": 11.893705910047391,
+      "adjusted_ate": 0.000915832296470145,
+      "adjusted_ci_low": 0.0008521575773566248,
+      "adjusted_ci_high": 0.0009795070155836651
     }
   },
   "cace": {

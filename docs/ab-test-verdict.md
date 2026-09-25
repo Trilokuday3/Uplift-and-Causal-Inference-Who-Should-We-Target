@@ -34,7 +34,14 @@ Regression-adjustment on the pre-treatment covariates f0–f11 (CUPED-style — 
 - **28.01%** for visit
 - **11.89%** for conversion
 
-Larger reduction on visit than conversion is expected: visit is more common and more strongly correlated with the available covariates (two features, f8 and f11, carry most of the adjustment weight — |θ| of −1.098 and −0.145 respectively for visit), while conversion is rarer and closer to noise even after adjustment.
+| | Raw ATE | Raw 95% CI | CUPED-adjusted ATE | CUPED-adjusted 95% CI |
+| --- | --- | --- | --- | --- |
+| Visit | +1.034pp | [1.006pp, 1.063pp] (width 0.057pp) | +0.698pp | [0.673pp, 0.723pp] (width 0.050pp) |
+| Conversion | +0.115pp | [0.108pp, 0.122pp] (width 0.013pp) | +0.092pp | [0.085pp, 0.098pp] (width 0.013pp) |
+
+The adjusted intervals are narrower, as expected from the variance reduction — but the **adjusted point estimate also moved**, from +1.034pp to +0.698pp for visit (about 33% smaller) and from +0.115pp to +0.092pp for conversion (about 20% smaller). This is not a bug: CUPED/regression adjustment is unbiased *in expectation over repeated randomizations*, not guaranteed to exactly reproduce the raw ATE on any one realized sample. With 12 covariates, even the small imbalances already reported in the balance check (all SMDs under 0.05) combine with their fitted regression coefficients into a real, non-trivial shift here — concretely, the shift equals `Σ θᵢ × (mean_treated,ᵢ − mean_control,ᵢ)` almost exactly, which is the textbook mechanism by which finite-sample covariate imbalance leaks into a regression-adjusted estimator. **We treat the raw ATE as the headline number for this verdict** — it directly compares the two randomized groups with no model in between — and report CUPED's adjusted estimate for completeness and as a demonstration of the variance-reduction technique, not as a replacement point estimate. Both intervals exclude 0 either way, so this doesn't change the overall conclusion.
+
+The larger reduction on visit than conversion is expected: visit is more common and more strongly correlated with the available covariates (two features, f8 and f11, carry most of the adjustment weight — θ of −1.098 and −0.145 respectively for visit), while conversion is rarer and closer to noise even after adjustment.
 
 ## Power: this test is enormously overpowered
 
