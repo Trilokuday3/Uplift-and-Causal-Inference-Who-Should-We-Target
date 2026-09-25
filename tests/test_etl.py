@@ -51,3 +51,30 @@ def test_srm_detects_break(spark, synthetic_criteo_pandas):
     assert result["p_value"] <= 0.01
     with pytest.raises(SRMCheckFailed):
         assert_srm_ok(result)
+
+
+def test_covariate_balance_all_features_reported(spark, synthetic_criteo_pandas):
+    from uplift.etl import compute_covariate_balance
+
+    pdf = synthetic_criteo_pandas(n=20_000)
+    sdf = spark.createDataFrame(pdf)
+
+    balance_df = compute_covariate_balance(sdf)
+
+    assert len(balance_df) == 12
+    assert set(balance_df["feature"]) == {f"f{i}" for i in range(12)}
+    assert (balance_df["smd"] < 0.1).all()  # synthetic features are treatment-independent
+
+
+def test_covariate_balance_detects_violation(spark, synthetic_criteo_pandas):
+    from uplift.etl import CovariateBalanceFailed, assert_balanced, compute_covariate_balance
+
+    pdf = synthetic_criteo_pandas(n=20_000)
+    pdf.loc[pdf["treatment"] == 1, "f0"] += 5.0  # inject a large imbalance
+    sdf = spark.createDataFrame(pdf)
+
+    balance_df = compute_covariate_balance(sdf)
+
+    assert balance_df.loc[balance_df["feature"] == "f0", "smd"].iloc[0] >= 0.1
+    with pytest.raises(CovariateBalanceFailed):
+        assert_balanced(balance_df)

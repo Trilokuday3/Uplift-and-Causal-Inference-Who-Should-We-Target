@@ -1,3 +1,4 @@
+import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StructField, StructType
@@ -78,4 +79,32 @@ def assert_srm_ok(srm_result: dict, alpha: float = 0.01) -> None:
             f"SRM check failed: p={srm_result['p_value']:.4f} <= {alpha}. "
             f"Observed treatment rate {srm_result['observed_treatment_rate']:.4f} vs "
             f"expected {srm_result['expected_treatment_rate']:.4f}."
+        )
+
+
+def compute_covariate_balance(
+    df: DataFrame,
+    feature_cols: list[str] = FEATURE_COLS,
+    treatment_col: str = TREATMENT_COL,
+) -> pd.DataFrame:
+    agg_exprs = []
+    for c in feature_cols:
+        agg_exprs += [F.mean(c).alias(f"{c}_mean"), F.variance(c).alias(f"{c}_var")]
+    stats_df = df.groupBy(treatment_col).agg(*agg_exprs).toPandas().set_index(treatment_col)
+
+    rows = []
+    for c in feature_cols:
+        mean_t, mean_c = stats_df.loc[1, f"{c}_mean"], stats_df.loc[0, f"{c}_mean"]
+        var_t, var_c = stats_df.loc[1, f"{c}_var"], stats_df.loc[0, f"{c}_var"]
+        pooled_sd = ((var_t + var_c) / 2) ** 0.5
+        smd = abs((mean_t - mean_c) / pooled_sd) if pooled_sd > 0 else 0.0
+        rows.append({"feature": c, "mean_treated": mean_t, "mean_control": mean_c, "smd": smd})
+    return pd.DataFrame(rows)
+
+
+def assert_balanced(balance_df: pd.DataFrame, threshold: float = 0.1) -> None:
+    violations = balance_df[balance_df["smd"] >= threshold]
+    if not violations.empty:
+        raise CovariateBalanceFailed(
+            f"Covariate balance check failed for: {violations['feature'].tolist()} (SMD >= {threshold})"
         )
