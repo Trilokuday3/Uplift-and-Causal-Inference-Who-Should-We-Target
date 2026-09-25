@@ -165,6 +165,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Classic A/B analysis on the full Criteo dataset")
     parser.add_argument("--input-dir", required=True, help="Directory containing the 'full' Parquet split")
     parser.add_argument("--output", required=True, help="Path to write JSON results")
+    parser.add_argument("--n-boot", type=int, default=200, help="Bootstrap resample count for ci_bootstrap_spark")
     args = parser.parse_args()
 
     builder = SparkSession.builder.appName("uplift-ab-test")
@@ -180,7 +181,7 @@ def main() -> None:
             outcome_results = {
                 "ate": compute_ate(pdf, outcome_col),
                 "ci_normal": ci_normal_approx(pdf, outcome_col),
-                "ci_bootstrap": ci_bootstrap_spark(spark_full, outcome_col, n_boot=200),
+                "ci_bootstrap": ci_bootstrap_spark(spark_full, outcome_col, n_boot=args.n_boot),
                 "power": power_analysis(pdf, outcome_col),
             }
             cuped_result = cuped_adjustment(pdf, outcome_col, FEATURE_COLS)

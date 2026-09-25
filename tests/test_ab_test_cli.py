@@ -26,3 +26,32 @@ def test_ab_test_cli_end_to_end(tmp_path, synthetic_criteo_pandas, spark):
     assert "ci_normal" in results["visit"]
     assert "cuped" in results["visit"]
     assert "power" in results["visit"]
+
+
+def test_ab_test_cli_respects_n_boot_override(tmp_path, synthetic_criteo_pandas, spark):
+    pdf = synthetic_criteo_pandas(n=2_000)
+    input_dir = tmp_path / "processed"
+    sdf = spark.createDataFrame(pdf)
+    sdf.write.mode("overwrite").parquet(str(input_dir / "full"))
+    out_path = tmp_path / "ab_test_results.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "uplift.ab_test",
+            "--input-dir",
+            str(input_dir),
+            "--output",
+            str(out_path),
+            "--n-boot",
+            "5",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": "src"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    results = json.loads(out_path.read_text())
+    assert results["visit"]["ci_bootstrap"]["n_boot"] == 5
