@@ -144,3 +144,24 @@ def build_model(name: str, seed: int = 42, **params) -> UpliftModel:
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model {name!r}; choose from {sorted(MODEL_REGISTRY)}")
     return MODEL_REGISTRY[name](seed=seed, **params)
+
+
+_LGBM_SPACE = {
+    "num_leaves": ("int", 7, 63),
+    "learning_rate": ("float_log", 0.02, 0.2),
+    "n_estimators": ("int", 30, 200),
+    "min_child_samples": ("int", 10, 200),
+}
+
+# Optuna search spaces for the uplift models (not the baselines). Entries are
+# (kind, low, high[, step]); causal-forest n_estimators must stay a multiple of 4.
+SEARCH_SPACES: dict[str, dict[str, tuple]] = {
+    "s_learner": _LGBM_SPACE,
+    "t_learner": _LGBM_SPACE,
+    "x_learner": _LGBM_SPACE,
+    "class_transformation": _LGBM_SPACE,
+    "causal_forest": {
+        "n_estimators": ("int", 48, 200, 4),
+        "min_samples_leaf": ("int", 10, 200),
+    },
+}
