@@ -135,3 +135,17 @@ def power_analysis(
         "observed_effect_size_cohens_h": float(observed_effect_size),
         "n_required_per_group_for_observed_effect": float(n_required),
     }
+
+
+def cace_iv(
+    df: pd.DataFrame, outcome_col: str, treatment_col: str = "treatment", exposure_col: str = "exposure"
+) -> dict:
+    """Wald IV estimator: effect on the actually-exposed, using treatment as an instrument
+    for exposure. The only function in this module that reads `exposure_col`."""
+    treated_mask = df[treatment_col] == 1
+    control_mask = df[treatment_col] == 0
+    itt_y = df.loc[treated_mask, outcome_col].mean() - df.loc[control_mask, outcome_col].mean()
+    itt_d = df.loc[treated_mask, exposure_col].mean() - df.loc[control_mask, exposure_col].mean()
+    if itt_d == 0:
+        raise ValueError("First-stage effect of treatment on exposure is zero; CACE is undefined.")
+    return {"itt_y": float(itt_y), "itt_d": float(itt_d), "cace": float(itt_y / itt_d)}

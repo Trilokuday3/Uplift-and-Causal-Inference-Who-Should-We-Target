@@ -1,6 +1,8 @@
+import inspect
 import math
 
 import pandas as pd
+import pytest
 
 
 def test_compute_ate_basic():
@@ -90,3 +92,41 @@ def test_power_analysis_reports_mde_and_required_n(synthetic_criteo_pandas):
     assert result["n_required_per_group_for_observed_effect"] > 0
     assert result["n_control"] > 0
     assert result["n_treated"] > 0
+
+
+def test_cace_iv_basic():
+    from uplift.ab_test import cace_iv
+
+    df = pd.DataFrame(
+        {
+            "treatment": [1, 1, 1, 1, 0, 0, 0, 0],
+            "exposure": [1, 1, 0, 1, 0, 0, 0, 0],
+            "visit": [1, 1, 0, 1, 0, 0, 0, 0],
+        }
+    )
+    result = cace_iv(df, outcome_col="visit")
+
+    assert result["itt_d"] > 0
+    assert result["cace"] == result["itt_y"] / result["itt_d"]
+
+
+def test_cace_iv_raises_on_zero_first_stage():
+    from uplift.ab_test import cace_iv
+
+    df = pd.DataFrame({"treatment": [1, 0, 1, 0], "exposure": [1, 1, 0, 0], "visit": [1, 0, 1, 0]})
+    with pytest.raises(ValueError):
+        cace_iv(df, outcome_col="visit")
+
+
+def test_no_default_ab_test_function_accepts_exposure_col():
+    from uplift import ab_test
+
+    allowed = {"cace_iv"}
+    checked = 0
+    for name, func in inspect.getmembers(ab_test, inspect.isfunction):
+        if name.startswith("_") or func.__module__ != ab_test.__name__ or name in allowed:
+            continue
+        sig = inspect.signature(func)
+        assert "exposure_col" not in sig.parameters, f"{name} must not accept exposure_col"
+        checked += 1
+    assert checked > 0  # sanity: the scan actually found functions to check
