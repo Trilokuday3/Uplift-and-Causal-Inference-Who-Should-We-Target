@@ -78,3 +78,15 @@ def test_cuped_preserves_ate_unbiasedness(synthetic_criteo_pandas):
     adjusted_ate = compute_ate(result["adjusted_df"], outcome_col="visit_cuped")["ate"]
 
     assert abs(adjusted_ate - raw_ate) < 0.005  # point estimate barely moves; only variance drops
+
+
+def test_power_analysis_reports_mde_and_required_n(synthetic_criteo_pandas):
+    from uplift.ab_test import power_analysis
+
+    df = synthetic_criteo_pandas(n=100_000)
+    result = power_analysis(df, outcome_col="visit")
+
+    assert result["mde_absolute_lift"] > 0
+    assert result["n_required_per_group_for_observed_effect"] > 0
+    assert result["n_control"] > 0
+    assert result["n_treated"] > 0

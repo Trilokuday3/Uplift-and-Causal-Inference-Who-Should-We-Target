@@ -5,6 +5,8 @@ import pandas as pd
 import statsmodels.api as sm
 from pyspark.sql import DataFrame as SparkDataFrame
 from scipy import stats
+from statsmodels.stats.power import NormalIndPower
+from statsmodels.stats.proportion import proportion_effectsize
 
 
 def compute_ate(df: pd.DataFrame, outcome_col: str, treatment_col: str = "treatment") -> dict:
@@ -85,4 +87,51 @@ def cuped_adjustment(df: pd.DataFrame, outcome_col: str, covariate_cols: list[st
         "variance_after": float(variance_after),
         "variance_reduction_pct": float(variance_reduction_pct),
         "adjusted_df": out_df,
+    }
+
+
+def _cohens_h_to_p2(effect_size: float, p1: float) -> float:
+    # effect_size = phi2 - phi1 (matches proportion_effectsize(p2, p1) convention used
+    # below for observed_effect_size), so a positive effect_size is an increase over p1.
+    phi1 = 2 * np.arcsin(np.sqrt(p1))
+    phi2 = phi1 + effect_size
+    return float(np.sin(phi2 / 2) ** 2)
+
+
+def power_analysis(
+    df: pd.DataFrame,
+    outcome_col: str,
+    treatment_col: str = "treatment",
+    alpha: float = 0.05,
+    power: float = 0.8,
+) -> dict:
+    ate_result = compute_ate(df, outcome_col, treatment_col)
+    n_control = ate_result["n_control"]
+    n_treated = ate_result["n_treated"]
+    ratio = n_treated / n_control
+
+    analysis = NormalIndPower()
+    # solve_power's power curve is symmetric in effect_size, so the solver can return
+    # either sign; abs() gives the minimum detectable *magnitude*, and _cohens_h_to_p2
+    # applies it as an increase over control (see its docstring comment).
+    mde_effect_size = abs(
+        analysis.solve_power(effect_size=None, nobs1=n_control, alpha=alpha, power=power, ratio=ratio)
+    )
+    p1 = ate_result["control_mean"]
+    mde_p2 = _cohens_h_to_p2(mde_effect_size, p1)
+
+    observed_effect_size = proportion_effectsize(ate_result["treated_mean"], ate_result["control_mean"])
+    n_required = analysis.solve_power(
+        effect_size=observed_effect_size, nobs1=None, alpha=alpha, power=power, ratio=1.0
+    )
+
+    return {
+        "alpha": alpha,
+        "power_target": power,
+        "n_control": n_control,
+        "n_treated": n_treated,
+        "mde_effect_size_cohens_h": float(mde_effect_size),
+        "mde_absolute_lift": float(mde_p2 - p1),
+        "observed_effect_size_cohens_h": float(observed_effect_size),
+        "n_required_per_group_for_observed_effect": float(n_required),
     }
