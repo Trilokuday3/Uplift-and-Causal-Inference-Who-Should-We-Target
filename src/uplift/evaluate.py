@@ -7,7 +7,7 @@ from sklift import metrics as sk_metrics
 SEGMENT_NAMES = ("persuadables", "sure_things", "lost_causes", "sleeping_dogs")
 
 
-def _validate(y, treatment, scores) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _validate(y, treatment, scores, shuffle: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     y, treatment, scores = np.asarray(y), np.asarray(treatment), np.asarray(scores, dtype=float)
     if not (len(y) == len(treatment) == len(scores)):
         raise ValueError("y, treatment and scores must have the same length")
@@ -15,7 +15,12 @@ def _validate(y, treatment, scores) -> tuple[np.ndarray, np.ndarray, np.ndarray]
         raise ValueError("Need at least one treated and one control row to measure uplift")
     if len(np.unique(y)) < 2:
         raise ValueError("Outcome has a single class; uplift is undefined without both 0s and 1s")
-    return y, treatment, scores
+    # Callers' rows are often grouped by treatment/outcome stratum; a fixed shuffle stops
+    # position-based tie-breaking from linking tied scores to the treatment arm.
+    if not shuffle:
+        return y, treatment, scores
+    perm = np.random.default_rng(0).permutation(len(y))
+    return y[perm], treatment[perm], scores[perm]
 
 
 def qini_curve(y, treatment, scores) -> tuple[np.ndarray, np.ndarray]:
@@ -66,7 +71,7 @@ def segment_table(y, treatment, uplift_scores, response_scores, eps: float = 0.0
     persuadables have predicted uplift > eps, sleeping dogs < -eps, and the rest split into
     sure things / lost causes by whether the baseline response score is above its median.
     `observed_uplift` (treated rate - control rate inside each segment) is the sanity check."""
-    y, treatment, uplift_scores = _validate(y, treatment, uplift_scores)
+    y, treatment, uplift_scores = _validate(y, treatment, uplift_scores, shuffle=False)
     response_scores = np.asarray(response_scores, dtype=float)
     high_response = response_scores >= np.median(response_scores)
     masks = {

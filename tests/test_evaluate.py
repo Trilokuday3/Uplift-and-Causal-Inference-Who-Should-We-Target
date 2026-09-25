@@ -92,3 +92,27 @@ def test_bootstrap_ci_skips_resamples_missing_an_arm():
 def test_metrics_reject_constant_outcome():
     with pytest.raises(ValueError):
         qini_auc(np.zeros(6, dtype=int), np.array([1, 0, 1, 0, 1, 0]), np.arange(6.0))
+
+
+def test_decile_table_ties_do_not_depend_on_row_order(scored):
+    order = np.argsort(scored["t"], kind="stable")  # all controls first, then all treated
+    table = decile_table(scored["y"][order], scored["t"][order], np.zeros(len(order)))
+    assert table["treated_rate"].notna().all()
+    assert table["control_rate"].notna().all()
+
+
+def test_qini_auc_of_tied_scores_is_not_inflated_by_row_order(scored):
+    y, t = scored["y"], scored["t"]
+    order = np.argsort(t, kind="stable")
+    tied = qini_auc(y[order], t[order], np.zeros(len(order)))
+    assert abs(tied) < 0.5 * qini_auc(y, t, scored["oracle"])
+
+
+def test_segment_table_keeps_response_scores_aligned_with_rows(scored):
+    y, t = scored["y"], scored["t"]
+    n = len(y)
+    response = np.arange(n, dtype=float)
+    table = segment_table(y, t, np.zeros(n), response).set_index("segment")
+    high = response >= np.median(response)
+    expected = y[high & (t == 1)].mean() - y[high & (t == 0)].mean()
+    assert table.loc["sure_things", "observed_uplift"] == pytest.approx(expected)
