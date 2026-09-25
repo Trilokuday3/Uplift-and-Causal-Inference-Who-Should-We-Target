@@ -1,4 +1,4 @@
-.PHONY: data ab-test test
+.PHONY: data ab-test train test
 
 DATA_DIR ?= data
 RAW_CSV ?= $(DATA_DIR)/raw/criteo-uplift-v2.1.csv

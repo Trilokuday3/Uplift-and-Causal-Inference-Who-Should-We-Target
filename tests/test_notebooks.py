@@ -24,3 +24,40 @@ def test_ab_test_notebook_is_valid_json_with_expected_sections():
     )
     for expected in ["compute_ate", "ci_normal_approx", "cuped_adjustment", "power_analysis"]:
         assert expected in source_text
+
+
+def _uplift_results_stub():
+    curve = {"x": [0.0, 50.0, 100.0], "y": [0.0, 4.0, 5.0]}
+    metrics = {"qini_auc": 0.1, "uplift_at_10": 0.1, "uplift_at_20": 0.1, "uplift_at_30": 0.1,
+               "auc": 0.1, "ci_low": 0.05, "ci_high": 0.15}
+    return {
+        "best_model": "s_learner",
+        "test_metrics": {"random": metrics, "s_learner": metrics},
+        "qini_curves": {"random": curve, "s_learner": curve},
+        "decile_table": [
+            {"decile": d, "n": 10, "treated_rate": 0.1, "control_rate": 0.05, "uplift": 0.05}
+            for d in range(1, 11)
+        ],
+        "segment_table": [
+            {"segment": s, "n": 10, "share": 0.25, "observed_uplift": 0.01}
+            for s in ("persuadables", "sure_things", "lost_causes", "sleeping_dogs")
+        ],
+    }
+
+
+def test_uplift_notebook_code_runs_against_results_json(tmp_path, monkeypatch):
+    nb_path = Path("notebooks/03_uplift.ipynb").resolve()
+    assert nb_path.exists()
+    nb = json.loads(nb_path.read_text())
+    assert nb["nbformat"] == 4
+    assert all(not c.get("outputs") for c in nb["cells"] if c["cell_type"] == "code")
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "notebooks").mkdir()
+    (tmp_path / "docs" / "uplift_results.json").write_text(json.dumps(_uplift_results_stub()))
+    monkeypatch.chdir(tmp_path / "notebooks")
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    namespace: dict = {}
+    for cell in nb["cells"]:
+        if cell["cell_type"] == "code":
+            exec("".join(cell["source"]), namespace)
