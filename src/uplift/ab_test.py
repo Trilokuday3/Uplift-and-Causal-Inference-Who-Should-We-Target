@@ -2,6 +2,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 from pyspark.sql import DataFrame as SparkDataFrame
 from scipy import stats
 
@@ -58,4 +59,30 @@ def ci_bootstrap_spark(
         "ci_high": float(ci_high),
         "n_boot": int(len(estimates)),
         "seed": seed,
+    }
+
+
+def cuped_adjustment(df: pd.DataFrame, outcome_col: str, covariate_cols: list[str]) -> dict:
+    """Regression-adjustment CUPED. No true pre-experiment period exists in this dataset, so
+    theta is estimated by regressing the outcome on pre-treatment covariates f0-f11 (pooled
+    across both arms, ignoring treatment assignment) rather than classic pre-period CUPED."""
+    X = sm.add_constant(df[covariate_cols])
+    y = df[outcome_col]
+    model = sm.OLS(y, X).fit()
+    theta = model.params[covariate_cols]
+    fitted_covariate_part = X[covariate_cols] @ theta
+    adjusted = df[outcome_col] - (fitted_covariate_part - fitted_covariate_part.mean())
+
+    variance_before = df[outcome_col].var(ddof=1)
+    variance_after = adjusted.var(ddof=1)
+    variance_reduction_pct = 100 * (1 - variance_after / variance_before)
+
+    out_df = df.copy()
+    out_df[f"{outcome_col}_cuped"] = adjusted
+    return {
+        "theta": theta.to_dict(),
+        "variance_before": float(variance_before),
+        "variance_after": float(variance_after),
+        "variance_reduction_pct": float(variance_reduction_pct),
+        "adjusted_df": out_df,
     }
