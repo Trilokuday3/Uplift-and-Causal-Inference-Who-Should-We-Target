@@ -8,6 +8,9 @@ from scipy import stats
 from statsmodels.stats.power import NormalIndPower
 from statsmodels.stats.proportion import proportion_effectsize
 
+from uplift.constants import FEATURE_COLS
+from uplift.spark_env import LOCAL_SPARK_CONFIG, apply_windows_spark_defaults
+
 
 def compute_ate(df: pd.DataFrame, outcome_col: str, treatment_col: str = "treatment") -> dict:
     treated = df.loc[df[treatment_col] == 1, outcome_col]
@@ -149,3 +152,54 @@ def cace_iv(
     if itt_d == 0:
         raise ValueError("First-stage effect of treatment on exposure is zero; CACE is undefined.")
     return {"itt_y": float(itt_y), "itt_d": float(itt_d), "cace": float(itt_y / itt_d)}
+
+
+def main() -> None:
+    import argparse
+    import json as json_module
+
+    from pyspark.sql import SparkSession
+
+    apply_windows_spark_defaults()
+
+    parser = argparse.ArgumentParser(description="Classic A/B analysis on the full Criteo dataset")
+    parser.add_argument("--input-dir", required=True, help="Directory containing the 'full' Parquet split")
+    parser.add_argument("--output", required=True, help="Path to write JSON results")
+    args = parser.parse_args()
+
+    builder = SparkSession.builder.appName("uplift-ab-test")
+    for key, value in LOCAL_SPARK_CONFIG.items():
+        builder = builder.config(key, value)
+    spark = builder.getOrCreate()
+    try:
+        pdf = spark.read.parquet(f"{args.input_dir}/full").toPandas()
+        spark_full = spark.read.parquet(f"{args.input_dir}/full")
+
+        results = {}
+        for outcome_col in ["visit", "conversion"]:
+            outcome_results = {
+                "ate": compute_ate(pdf, outcome_col),
+                "ci_normal": ci_normal_approx(pdf, outcome_col),
+                "ci_bootstrap": ci_bootstrap_spark(spark_full, outcome_col, n_boot=200),
+                "power": power_analysis(pdf, outcome_col),
+            }
+            cuped_result = cuped_adjustment(pdf, outcome_col, FEATURE_COLS)
+            outcome_results["cuped"] = {
+                "theta": cuped_result["theta"],
+                "variance_before": cuped_result["variance_before"],
+                "variance_after": cuped_result["variance_after"],
+                "variance_reduction_pct": cuped_result["variance_reduction_pct"],
+            }
+            results[outcome_col] = outcome_results
+
+        results["cace"] = cace_iv(pdf, outcome_col="visit")
+
+        with open(args.output, "w") as f:
+            json_module.dump(results, f, indent=2, default=float)
+        print(f"Wrote A/B test results to {args.output}")
+    finally:
+        spark.stop()
+
+
+if __name__ == "__main__":
+    main()
