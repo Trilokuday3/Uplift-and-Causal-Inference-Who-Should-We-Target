@@ -32,7 +32,7 @@ def test_read_csv_to_spark_applies_schema(spark, tmp_path):
 def test_srm_passes_on_clean_split(spark, synthetic_criteo_pandas):
     from uplift.etl import assert_srm_ok, compute_srm
 
-    pdf = synthetic_criteo_pandas(n=20_000, treatment_rate=0.846)
+    pdf = synthetic_criteo_pandas(n=20_000, treatment_rate=0.85)
     sdf = spark.createDataFrame(pdf)
 
     result = compute_srm(sdf)
@@ -44,10 +44,10 @@ def test_srm_passes_on_clean_split(spark, synthetic_criteo_pandas):
 def test_srm_detects_break(spark, synthetic_criteo_pandas):
     from uplift.etl import SRMCheckFailed, assert_srm_ok, compute_srm
 
-    pdf = synthetic_criteo_pandas(n=20_000, treatment_rate=0.90)  # broken: should be 0.846
+    pdf = synthetic_criteo_pandas(n=20_000, treatment_rate=0.90)  # broken: should be 0.85
     sdf = spark.createDataFrame(pdf)
 
-    result = compute_srm(sdf, expected_treatment_rate=0.846)
+    result = compute_srm(sdf, expected_treatment_rate=0.85)
 
     assert result["p_value"] <= 0.01
     with pytest.raises(SRMCheckFailed):

@@ -31,7 +31,7 @@ def spark():
 
 @pytest.fixture
 def synthetic_criteo_pandas():
-    def _make(n: int = 1000, treatment_rate: float = 0.846, seed: int = 42) -> pd.DataFrame:
+    def _make(n: int = 1000, treatment_rate: float = 0.85, seed: int = 42) -> pd.DataFrame:
         rng = np.random.default_rng(seed)
         treatment = rng.binomial(1, treatment_rate, size=n)
         features = {f"f{i}": rng.normal(size=n) for i in range(12)}
