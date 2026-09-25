@@ -127,6 +127,51 @@ def test_split_determinism(spark, synthetic_criteo_pandas):
     assert test1.count() == test2.count()
 
 
+def test_split_is_truly_stratified_per_cell(spark):
+    """A random hash split only balances strata approximately, by luck of large numbers.
+    True stratification gives exact per-cell proportions. Build cells with clean divisors
+    so the correct answer is an exact integer, not just close."""
+    from uplift.etl import stratified_split
+    import pandas as pd
+
+    rows = []
+    for treatment in [0, 1]:
+        for visit in [0, 1]:
+            for i in range(200):
+                rows.append({"treatment": treatment, "visit": visit, "id": f"{treatment}-{visit}-{i}"})
+    pdf = pd.DataFrame(rows)
+    sdf = spark.createDataFrame(pdf)
+
+    train, val, test = stratified_split(sdf, seed=42, ratios=(0.6, 0.2, 0.2))
+
+    for treatment in [0, 1]:
+        for visit in [0, 1]:
+            cell = F.col("treatment") == treatment
+            cell = cell & (F.col("visit") == visit)
+            assert train.filter(cell).count() == 120
+            assert val.filter(cell).count() == 40
+            assert test.filter(cell).count() == 40
+
+
+def test_split_determinism_independent_of_partitioning(spark, synthetic_criteo_pandas):
+    """monotonically_increasing_id() depends on how Spark partitions the input, so the
+    same seed on a differently-partitioned copy of the same data must still assign every
+    row to the same split for the split to be reproducible on another machine/run."""
+    from uplift.etl import stratified_split
+
+    pdf = synthetic_criteo_pandas(n=2_000)
+    sdf_one_partition = spark.createDataFrame(pdf).repartition(1)
+    sdf_many_partitions = spark.createDataFrame(pdf).repartition(8)
+
+    train1, _, _ = stratified_split(sdf_one_partition, seed=42)
+    train2, _, _ = stratified_split(sdf_many_partitions, seed=42)
+
+    cols = sorted(train1.columns)
+    train1_rows = {tuple(r) for r in train1.select(*cols).collect()}
+    train2_rows = {tuple(r) for r in train2.select(*cols).collect()}
+    assert train1_rows == train2_rows
+
+
 def test_write_split_meta(spark, tmp_path, synthetic_criteo_pandas):
     from uplift.etl import stratified_split, write_split_meta
     import json

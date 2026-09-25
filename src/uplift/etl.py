@@ -1,7 +1,7 @@
 import json
 
 import pandas as pd
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StructField, StructType
 from scipy import stats
@@ -120,18 +120,30 @@ def stratified_split(
     seed: int = 42,
     ratios: tuple[float, float, float] = (0.6, 0.2, 0.2),
 ) -> tuple[DataFrame, DataFrame, DataFrame]:
+    """True per-stratum stratification: within each (treatment_col, outcome_col) cell,
+    rows are ranked by a content hash (not `monotonically_increasing_id`, which depends
+    on how Spark happens to partition the input and so isn't reproducible across runs
+    with different partitioning) and cut at exact fractional thresholds of that cell's
+    own row count - not an aggregate/global split that only balances by luck of large
+    numbers."""
     assert abs(sum(ratios) - 1.0) < 1e-9, "ratios must sum to 1.0"
-    train_cut = ratios[0] * 100
-    val_cut = (ratios[0] + ratios[1]) * 100
+    train_cut, val_cut = ratios[0], ratios[0] + ratios[1]
 
-    bucketed = df.withColumn("_row_id", F.monotonically_increasing_id()).withColumn(
-        "_bucket", F.pmod(F.hash(F.col("_row_id"), F.lit(seed)), F.lit(100))
+    content_hash = F.xxhash64(*[F.col(c) for c in df.columns], F.lit(seed))
+    stratum = (F.col(treatment_col), F.col(outcome_col))
+    stratum_order = Window.partitionBy(*stratum).orderBy(content_hash)
+    stratum_size = Window.partitionBy(*stratum)
+
+    ranked = (
+        df.withColumn("_content_hash", content_hash)
+        .withColumn("_rank", F.row_number().over(stratum_order) - 1)
+        .withColumn("_stratum_count", F.count(F.lit(1)).over(stratum_size))
+        .withColumn("_frac", F.col("_rank") / F.col("_stratum_count"))
     )
-    train_df = bucketed.filter(F.col("_bucket") < train_cut).drop("_row_id", "_bucket")
-    val_df = bucketed.filter((F.col("_bucket") >= train_cut) & (F.col("_bucket") < val_cut)).drop(
-        "_row_id", "_bucket"
-    )
-    test_df = bucketed.filter(F.col("_bucket") >= val_cut).drop("_row_id", "_bucket")
+    drop_cols = ["_content_hash", "_rank", "_stratum_count", "_frac"]
+    train_df = ranked.filter(F.col("_frac") < train_cut).drop(*drop_cols)
+    val_df = ranked.filter((F.col("_frac") >= train_cut) & (F.col("_frac") < val_cut)).drop(*drop_cols)
+    test_df = ranked.filter(F.col("_frac") >= val_cut).drop(*drop_cols)
     return train_df, val_df, test_df
 
 
@@ -170,8 +182,9 @@ def main() -> None:
     spark = builder.getOrCreate()
     try:
         raw_df = read_csv_to_spark(spark, args.input)
-        write_parquet(spark, raw_df, f"{args.output_dir}/full")
 
+        # Gates run before anything is published: a failed run must not leave a `full`
+        # dataset behind that ab_test.py could unknowingly analyze.
         srm_result = compute_srm(raw_df)
         print("SRM check:", srm_result)
         assert_srm_ok(srm_result)
@@ -179,6 +192,8 @@ def main() -> None:
         balance_df = compute_covariate_balance(raw_df)
         print(balance_df.to_string())
         assert_balanced(balance_df)
+
+        write_parquet(spark, raw_df, f"{args.output_dir}/full")
 
         train_df, val_df, test_df = stratified_split(raw_df, seed=args.seed)
         for name, split_df in [("train", train_df), ("val", val_df), ("test", test_df)]:

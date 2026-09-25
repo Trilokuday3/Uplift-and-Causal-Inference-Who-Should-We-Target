@@ -42,7 +42,7 @@ At the actual sample size (11,882,655 treated / 2,096,937 control), the minimum 
 
 ## Optional: effect on the actually-exposed (CACE)
 
-Using `treatment` as an instrument for `exposure` (Wald estimator): first-stage compliance (effect of treatment assignment on actually being exposed) is 3.60pp. The resulting CACE is **28.70%** — larger than the 27.07% intent-to-treat relative lift, which is exactly what should happen: CACE concentrates the effect onto the subset of treated users who were actually exposed, rather than diluting it across everyone assigned to treatment regardless of whether the ad was actually shown.
+Using `treatment` as an instrument for `exposure` (Wald estimator): first-stage compliance (effect of treatment assignment on actually being exposed) is 3.60pp. The resulting CACE is **+28.70 percentage points** of visit probability among users who were actually exposed to the ad — an *absolute* effect, not a relative lift, so the correct comparison is against the ITT's +1.034 percentage points, not its 27.07% relative figure. CACE = ITT ÷ first-stage compliance = 1.034pp ÷ 0.0360 ≈ 28.7pp, roughly **28× larger** than the intent-to-treat effect. That's expected: CACE concentrates the effect onto only the subset of treated users who were actually exposed (about 3.6% of assignment translates to exposure), rather than diluting it across everyone assigned to treatment regardless of whether the ad was actually shown.
 
 ## Caveats
 

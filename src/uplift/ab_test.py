@@ -191,11 +191,15 @@ def main() -> None:
                 "power": power_analysis(pdf, outcome_col),
             }
             cuped_result = cuped_adjustment(pdf, outcome_col, FEATURE_COLS)
+            adjusted_ci = ci_normal_approx(cuped_result["adjusted_df"], f"{outcome_col}_cuped")
             outcome_results["cuped"] = {
                 "theta": cuped_result["theta"],
                 "variance_before": cuped_result["variance_before"],
                 "variance_after": cuped_result["variance_after"],
                 "variance_reduction_pct": cuped_result["variance_reduction_pct"],
+                "adjusted_ate": adjusted_ci["ate"],
+                "adjusted_ci_low": adjusted_ci["ci_low"],
+                "adjusted_ci_high": adjusted_ci["ci_high"],
             }
             results[outcome_col] = outcome_results
 
