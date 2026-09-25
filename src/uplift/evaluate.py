@@ -66,17 +66,25 @@ def decile_table(y, treatment, scores, n_bins: int = 10) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def segment_table(y, treatment, uplift_scores, response_scores, eps: float = 0.0) -> pd.DataFrame:
-    """Segments are not observable per person, so they are defined from model scores:
-    persuadables have predicted uplift > eps, sleeping dogs < -eps, and the rest split into
-    sure things / lost causes by whether the baseline response score is above its median.
-    `observed_uplift` (treated rate - control rate inside each segment) is the sanity check."""
+def segment_table(
+    y, treatment, uplift_scores, response_scores, eps: float | None = None
+) -> pd.DataFrame:
+    """Segments are not observable per person, so they are defined from model scores, relative to
+    the population: persuadables have predicted uplift above median + eps, sleeping dogs below
+    median - eps, and the middle band splits into sure things / lost causes by whether the
+    baseline response score is above its median. eps defaults to 0.5 x the score std. Because
+    Criteo's overall lift is positive, "sleeping dogs" here means lowest predicted uplift; only
+    the `observed_uplift` column (treated rate - control rate inside each segment) says whether
+    that group is truly negative."""
     y, treatment, uplift_scores = _validate(y, treatment, uplift_scores, shuffle=False)
     response_scores = np.asarray(response_scores, dtype=float)
+    center = np.median(uplift_scores)
+    if eps is None:
+        eps = 0.5 * float(np.std(uplift_scores))
     high_response = response_scores >= np.median(response_scores)
     masks = {
-        "persuadables": uplift_scores > eps,
-        "sleeping_dogs": uplift_scores < -eps,
+        "persuadables": uplift_scores > center + eps,
+        "sleeping_dogs": uplift_scores < center - eps,
     }
     neutral = ~(masks["persuadables"] | masks["sleeping_dogs"])
     masks["sure_things"] = neutral & high_response

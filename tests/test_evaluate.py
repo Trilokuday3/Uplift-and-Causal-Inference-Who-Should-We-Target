@@ -116,3 +116,10 @@ def test_segment_table_keeps_response_scores_aligned_with_rows(scored):
     high = response >= np.median(response)
     expected = y[high & (t == 1)].mean() - y[high & (t == 0)].mean()
     assert table.loc["sure_things", "observed_uplift"] == pytest.approx(expected)
+
+
+def test_segment_table_default_band_populates_all_four_segments_when_scores_are_mostly_positive(scored):
+    shifted = scored["oracle"] + 3.0  # like real data: nearly every predicted uplift is > 0
+    table = segment_table(scored["y"], scored["t"], shifted, scored["noise"])
+    assert (table["n"] > 0).all()
+    assert table["share"].max() < 0.8
