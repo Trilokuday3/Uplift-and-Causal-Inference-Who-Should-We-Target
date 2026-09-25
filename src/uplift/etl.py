@@ -14,6 +14,7 @@ from uplift.constants import (
     TREATMENT_COL,
     VISIT_COL,
 )
+from uplift.spark_env import LOCAL_SPARK_CONFIG, apply_windows_spark_defaults
 
 
 class SRMCheckFailed(Exception):
@@ -150,3 +151,48 @@ def write_split_meta(
     with open(output_path, "w") as f:
         json.dump(meta, f, indent=2)
     return meta
+
+
+def main() -> None:
+    import argparse
+
+    apply_windows_spark_defaults()
+
+    parser = argparse.ArgumentParser(description="Uplift project ETL: CSV -> validated, split Parquet")
+    parser.add_argument("--input", required=True, help="Path to raw Criteo v2.1 CSV")
+    parser.add_argument("--output-dir", required=True, help="Directory to write processed Parquet + split_meta.json")
+    parser.add_argument("--seed", type=int, default=42)
+    args = parser.parse_args()
+
+    builder = SparkSession.builder.appName("uplift-etl")
+    for key, value in LOCAL_SPARK_CONFIG.items():
+        builder = builder.config(key, value)
+    spark = builder.getOrCreate()
+    try:
+        raw_df = read_csv_to_spark(spark, args.input)
+        write_parquet(spark, raw_df, f"{args.output_dir}/full")
+
+        srm_result = compute_srm(raw_df)
+        print("SRM check:", srm_result)
+        assert_srm_ok(srm_result)
+
+        balance_df = compute_covariate_balance(raw_df)
+        print(balance_df.to_string())
+        assert_balanced(balance_df)
+
+        train_df, val_df, test_df = stratified_split(raw_df, seed=args.seed)
+        for name, split_df in [("train", train_df), ("val", val_df), ("test", test_df)]:
+            write_parquet(spark, split_df, f"{args.output_dir}/{name}")
+
+        meta = write_split_meta(
+            {"train": train_df, "val": val_df, "test": test_df},
+            seed=args.seed,
+            output_path=f"{args.output_dir}/split_meta.json",
+        )
+        print("Split meta:", meta)
+    finally:
+        spark.stop()
+
+
+if __name__ == "__main__":
+    main()
