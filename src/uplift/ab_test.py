@@ -1,6 +1,8 @@
 import math
 
+import numpy as np
 import pandas as pd
+from pyspark.sql import DataFrame as SparkDataFrame
 from scipy import stats
 
 
@@ -31,3 +33,29 @@ def ci_normal_approx(
     z = stats.norm.ppf(1 - alpha / 2)
     ate = ate_result["ate"]
     return {"ate": ate, "se": se, "ci_low": ate - z * se, "ci_high": ate + z * se, "alpha": alpha}
+
+
+def ci_bootstrap_spark(
+    spark_df: SparkDataFrame,
+    outcome_col: str,
+    treatment_col: str = "treatment",
+    n_boot: int = 2000,
+    seed: int = 42,
+    alpha: float = 0.05,
+) -> dict:
+    estimates = []
+    for i in range(n_boot):
+        sample = spark_df.sample(withReplacement=True, fraction=1.0, seed=seed + i)
+        rows = sample.groupBy(treatment_col).avg(outcome_col).collect()
+        means = {r[treatment_col]: r[f"avg({outcome_col})"] for r in rows}
+        if 1 in means and 0 in means:
+            estimates.append(means[1] - means[0])
+    estimates = np.array(estimates)
+    ci_low, ci_high = np.percentile(estimates, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return {
+        "ate_mean": float(estimates.mean()),
+        "ci_low": float(ci_low),
+        "ci_high": float(ci_high),
+        "n_boot": int(len(estimates)),
+        "seed": seed,
+    }

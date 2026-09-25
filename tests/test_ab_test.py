@@ -26,3 +26,30 @@ def test_ci_normal_approx_contains_true_effect_on_large_sample(synthetic_criteo_
 
     assert result["ci_low"] < result["ate"] < result["ci_high"]
     assert result["se"] > 0
+
+
+def test_ci_bootstrap_spark_is_deterministic(spark, synthetic_criteo_pandas):
+    from uplift.ab_test import ci_bootstrap_spark
+
+    pdf = synthetic_criteo_pandas(n=2_000)
+    sdf = spark.createDataFrame(pdf)
+
+    result1 = ci_bootstrap_spark(sdf, outcome_col="visit", n_boot=20, seed=42)
+    result2 = ci_bootstrap_spark(sdf, outcome_col="visit", n_boot=20, seed=42)
+
+    assert result1 == result2
+
+
+def test_ci_bootstrap_spark_brackets_normal_approx(spark, synthetic_criteo_pandas):
+    from uplift.ab_test import ci_bootstrap_spark, ci_normal_approx
+
+    pdf = synthetic_criteo_pandas(n=5_000)
+    sdf = spark.createDataFrame(pdf)
+
+    normal_result = ci_normal_approx(pdf, outcome_col="visit")
+    boot_result = ci_bootstrap_spark(sdf, outcome_col="visit", n_boot=50, seed=42)
+
+    # the two CIs should substantially overlap on the same data
+    overlap_low = max(normal_result["ci_low"], boot_result["ci_low"])
+    overlap_high = min(normal_result["ci_high"], boot_result["ci_high"])
+    assert overlap_low < overlap_high
