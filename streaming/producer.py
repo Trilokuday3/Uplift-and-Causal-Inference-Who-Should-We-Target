@@ -62,9 +62,11 @@ def replay(
     now: Callable[[], float] = time.monotonic,
 ) -> int:
     """Emit events on their simulated clock (event_time / speed seconds after start)."""
-    start, sent = now(), 0
+    start, sent, origin = now(), 0, None
     for event in events:
-        wait = event["value"]["event_time"] / speed - (now() - start)
+        if origin is None:
+            origin = event["value"]["event_time"]
+        wait = (event["value"]["event_time"] - origin) / speed - (now() - start)
         if wait > 0:
             sleep(wait)
         sink.send(event["topic"], event["key"], event["value"])

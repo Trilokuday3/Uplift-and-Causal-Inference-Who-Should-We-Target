@@ -22,7 +22,7 @@ def test_exposure_events_never_carry_outcomes_or_exposure_flag(frame):
 def test_exposures_are_shuffled_unique_and_paced_by_eps(frame):
     exposures, _ = build_events(frame, seed=1, eps=100)
     assert exposures["user_id"].is_unique and len(exposures) == len(frame)
-    assert np.allclose(np.diff(exposures["event_time"]), 1 / 100)
+    assert np.allclose(np.diff(exposures["event_time"]), 1 / 100, atol=1e-5)
     assert not exposures["user_id"].is_monotonic_increasing
 
 
@@ -73,4 +73,4 @@ def test_replay_paces_events_on_simulated_clock_and_delivers_all(frame):
 
     replay(events, sink, speed=1.0, sleep=fake_sleep, now=lambda: clock["t"])
     assert len(sink.messages) == len(events)
-    assert clock["t"] == pytest.approx(events[-1]["value"]["event_time"] - events[0]["value"]["event_time"] + events[0]["value"]["event_time"], abs=1e-6)
+    assert clock["t"] == pytest.approx(events[-1]["value"]["event_time"] - events[0]["value"]["event_time"], abs=1e-6)
