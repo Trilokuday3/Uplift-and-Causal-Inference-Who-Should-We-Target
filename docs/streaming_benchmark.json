@@ -1,0 +1,8 @@
+{
+  "events_per_sec": 17006.73793334527,
+  "p95_batch_ms": 28.965424996567886,
+  "p95_event_ms": 28.965424996567886,
+  "batch_size": 500,
+  "model": "causal_forest",
+  "note": "single process, in-memory scoring only; excludes Kafka and network overhead"
+}

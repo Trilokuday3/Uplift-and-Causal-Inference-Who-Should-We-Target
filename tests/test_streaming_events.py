@@ -74,3 +74,20 @@ def test_replay_paces_events_on_simulated_clock_and_delivers_all(frame):
     replay(events, sink, speed=1.0, sleep=fake_sleep, now=lambda: clock["t"])
     assert len(sink.messages) == len(events)
     assert clock["t"] == pytest.approx(events[-1]["value"]["event_time"] - events[0]["value"]["event_time"], abs=1e-6)
+
+
+def test_write_event_files_emits_parquet_dirs_and_batch_ate_meta(frame, tmp_path):
+    import json
+
+    import pandas as pd
+
+    from streaming.producer import write_event_files
+
+    exposures, outcomes = build_events(frame, seed=1, eps=50)
+    write_event_files(exposures, outcomes, tmp_path)
+    assert len(pd.read_parquet(tmp_path / "exposures")) == len(frame)
+    assert len(pd.read_parquet(tmp_path / "outcomes")) == len(frame)
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    rates = frame.groupby("treatment")["visit"].mean()
+    assert meta["batch_ate"] == pytest.approx(rates[1] - rates[0])
+    assert meta["n_events"] == len(frame)

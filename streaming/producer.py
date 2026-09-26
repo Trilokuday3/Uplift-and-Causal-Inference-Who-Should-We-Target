@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from pathlib import Path
 from typing import Callable, Iterable
 
 import pandas as pd
@@ -75,6 +76,19 @@ def replay(
     return sent
 
 
+def write_event_files(exposures: pd.DataFrame, outcomes: pd.DataFrame, out_dir) -> None:
+    """File-based stand-in for Kafka: parquet dirs the Spark job can stream, plus the batch ATE of
+    exactly these events for the streaming-vs-batch consistency check."""
+    out = Path(out_dir)
+    for name, frame in (("exposures", exposures), ("outcomes", outcomes)):
+        (out / name).mkdir(parents=True, exist_ok=True)
+        frame.to_parquet(out / name / "part-0.parquet")
+    joined = exposures[["user_id", "treatment"]].merge(outcomes[["user_id", "visit"]], on="user_id")
+    rates = joined.groupby("treatment")["visit"].mean()
+    meta = {"batch_ate": float(rates[1] - rates[0]), "n_events": int(len(joined))}
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simulated real-time replay of the test split into Kafka.")
     parser.add_argument("--input-dir", default="data/processed")
@@ -87,6 +101,8 @@ def main() -> None:
     parser.add_argument("--drift-feature", default=None, help="feature to shift halfway through (drift demo)")
     parser.add_argument("--drift-shift", type=float, default=3.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--sink", choices=["kafka", "files"], default="kafka")
+    parser.add_argument("--out-dir", default="data/stream", help="output for --sink files")
     args = parser.parse_args()
 
     test = pd.read_parquet(f"{args.input_dir}/test")
@@ -95,6 +111,10 @@ def main() -> None:
     )
     if args.drift_feature:
         exposures = inject_drift(exposures, args.drift_feature, args.drift_shift)
+    if args.sink == "files":
+        write_event_files(exposures, outcomes, args.out_dir)
+        print(f"simulated real-time replay (files): wrote {len(exposures)} exposures to {args.out_dir}")
+        return
     create_topics(args.bootstrap_servers)
     sent = replay(merged_events(exposures, outcomes), KafkaSink(args.bootstrap_servers), speed=args.speed)
     print(f"simulated real-time replay: sent {sent} events")
