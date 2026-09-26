@@ -107,3 +107,25 @@ def test_train_cli_saves_model_and_test_scores(tmp_path, uplift_frame):
     scores = pd.read_parquet(artifacts / "test_scores.parquet")
     assert {"treatment", "outcome", "random", "response_model", "s_learner"} <= set(scores.columns)
     assert len(model.predict_uplift(scores.iloc[:5].assign(**{f"f{i}": 0.0 for i in range(12)})[[f"f{i}" for i in range(12)]])) == 5
+
+
+def test_train_cli_registers_best_model_when_asked(tmp_path, uplift_frame):
+    from mlflow import MlflowClient
+
+    input_dir = _write_splits(tmp_path, uplift_frame)
+    db_uri = "sqlite:///" + (tmp_path / "mlflow.db").as_posix()
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "uplift.train",
+            "--input-dir", str(input_dir), "--output", str(tmp_path / "r.json"),
+            "--models", "response_model,s_learner", "--sample-size", "1500",
+            "--n-trials", "1", "--n-boot", "10", "--mlflow-uri", db_uri,
+            "--artifacts-dir", str(tmp_path / "artifacts"), "--register-model", "uplift",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": "src", "MLFLOW_DISABLE_AGENT_HINT": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    version = MlflowClient(tracking_uri=db_uri).get_model_version_by_alias("uplift", "production")
+    assert int(version.version) >= 1

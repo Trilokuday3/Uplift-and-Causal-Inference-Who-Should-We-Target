@@ -71,10 +71,17 @@ def create_app_from_env() -> FastAPI:
     policy = json.loads(policy_path.read_text()) if policy_path.exists() else None
     model = threshold = None
     name = "unknown"
-    if (artifacts / "best_model.joblib").exists() and (artifacts / "model_meta.json").exists():
+    has_model = (artifacts / "best_model.joblib").exists() or os.environ.get("MODEL_URI")
+    if has_model and (artifacts / "model_meta.json").exists():
         meta = json.loads((artifacts / "model_meta.json").read_text())
         name = meta["model_name"]
-        model = joblib.load(artifacts / "best_model.joblib")
+        model_uri = os.environ.get("MODEL_URI")
+        if model_uri:
+            from uplift.registry import load_registered_model
+
+            model = load_registered_model(model_uri, os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
+        else:
+            model = joblib.load(artifacts / "best_model.joblib")
         fraction = float(os.environ.get("TREAT_FRACTION", policy["operating_point"]["fraction"] if policy else 0.3))
         scores = pd.read_parquet(artifacts / "test_scores.parquet")[name]
         threshold = float(np.quantile(scores.to_numpy(), 1 - fraction))

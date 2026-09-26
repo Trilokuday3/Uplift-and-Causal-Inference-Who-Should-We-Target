@@ -129,7 +129,10 @@ def run(
     names: list[str] | None = None,
     seed: int = 42,
     artifacts_dir: str | None = None,
+    register_model: str | None = None,
 ) -> dict:
+    if register_model and not artifacts_dir:
+        raise ValueError("--register-model needs --artifacts-dir (the saved model is what gets registered)")
     names = names or list(MODEL_REGISTRY)
     tracking_uri = mlflow_uri
 
@@ -196,6 +199,10 @@ def run(
             joblib.dump(fitted[best], out / "best_model.joblib")
             meta = {"model_name": best, "outcome": outcome_col, "feature_cols": FEATURE_COLS, "n_train": len(train)}
             (out / "model_meta.json").write_text(json.dumps(meta, indent=2))
+            if register_model:
+                from uplift.registry import register_model as register
+
+                results["registered_model_version"] = register(out / "best_model.joblib", register_model, tracking_uri)
 
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(json.dumps(_clean(results), indent=2))
@@ -215,6 +222,7 @@ def main() -> None:
     parser.add_argument("--models", default=None, help="comma-separated subset of the registry")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--artifacts-dir", default=None, help="save best model + test scores here")
+    parser.add_argument("--register-model", default=None, help="register the best model in MLflow under this name (alias: production)")
     args = parser.parse_args()
     results = run(
         args.input_dir,
@@ -228,6 +236,7 @@ def main() -> None:
         names=args.models.split(",") if args.models else None,
         seed=args.seed,
         artifacts_dir=args.artifacts_dir,
+        register_model=args.register_model,
     )
     for name, m in results["test_metrics"].items():
         print(f"{name:22s} qini_auc={m['qini_auc']:.5f}  CI=[{m['ci_low']:.5f}, {m['ci_high']:.5f}]")

@@ -137,7 +137,12 @@ class FanOutSink:
             sink.flush()
 
 
-def load_model(artifacts_dir: str):
+def load_model(artifacts_dir: str, model_uri: str | None = None, tracking_uri: str | None = None):
+    """Load the model from the MLflow registry (`models:/name@alias`) or, by default, the saved file."""
+    if model_uri:
+        from uplift.registry import load_registered_model
+
+        return load_registered_model(model_uri, tracking_uri or "sqlite:///mlflow.db")
     return joblib.load(Path(artifacts_dir) / "best_model.joblib")
 
 
@@ -148,6 +153,8 @@ def main() -> None:
     parser.add_argument("--fraction", type=float, default=0.3, help="share of users to treat (from the policy)")
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--postgres-dsn", default=None)
+    parser.add_argument("--model-uri", default=None, help="e.g. models:/uplift@production (default: saved file)")
+    parser.add_argument("--mlflow-uri", default="sqlite:///mlflow.db")
     parser.add_argument("--reference-dir", default=None, help="processed data dir; enables drift monitoring")
     parser.add_argument("--drift-window", type=int, default=1000)
     args = parser.parse_args()
@@ -170,7 +177,7 @@ def main() -> None:
         monitor = DriftMonitor(reference, FEATURE_COLS, window_size=args.drift_window)
     consumer = KafkaBatchConsumer(args.bootstrap_servers)
     print(f"scoring with {meta['model_name']}, treating top {args.fraction:.0%} (threshold {threshold:.5f})")
-    run_scorer(consumer, sink, load_model(args.artifacts_dir), threshold, batch_size=args.batch_size,
+    run_scorer(consumer, sink, load_model(args.artifacts_dir, args.model_uri, args.mlflow_uri), threshold, batch_size=args.batch_size,
                drift_monitor=monitor)
 
 
