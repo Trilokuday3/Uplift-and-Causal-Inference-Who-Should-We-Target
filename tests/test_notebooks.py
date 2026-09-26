@@ -61,3 +61,30 @@ def test_uplift_notebook_code_runs_against_results_json(tmp_path, monkeypatch):
     for cell in nb["cells"]:
         if cell["cell_type"] == "code":
             exec("".join(cell["source"]), namespace)
+
+
+def test_policy_notebook_code_runs_against_policy_json(tmp_path, monkeypatch):
+    nb_path = Path("notebooks/04_policy.ipynb").resolve()
+    assert nb_path.exists()
+    nb = json.loads(nb_path.read_text())
+    assert all(not c.get("outputs") for c in nb["cells"] if c["cell_type"] == "code")
+    curve = [
+        {"fraction": f, "n_targeted": int(f * 100), "uplift": 0.05, "incremental_outcomes": f * 5,
+         "cost": f * 50, "revenue": f * 100, "profit": f * 50}
+        for f in (0.5, 1.0)
+    ]
+    stub = {
+        "assumptions": {"cost_per_impression": 0.5, "value_per_outcome": 20.0, "currency": "INR", "note": "x"},
+        "strategies": {s: {"curve": curve} for s in ("uplift", "response_model", "random")},
+        "operating_point": {"strategy": "uplift", "fraction": 0.5, "profit": 25.0},
+        "segment_savings": [{"segment": "do_not_target_total", "n": 1, "net_saving": 1.0}],
+    }
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "notebooks").mkdir()
+    (tmp_path / "docs" / "policy_results.json").write_text(json.dumps(stub))
+    monkeypatch.chdir(tmp_path / "notebooks")
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    namespace: dict = {}
+    for cell in nb["cells"]:
+        if cell["cell_type"] == "code":
+            exec("".join(cell["source"]), namespace)
