@@ -46,6 +46,7 @@ def create_topics(bootstrap_servers: str, exposure_partitions: int = 6) -> None:
         NewTopic(EXPOSURES_TOPIC, num_partitions=exposure_partitions, replication_factor=1),
         NewTopic(OUTCOMES_TOPIC, num_partitions=exposure_partitions, replication_factor=1),
         NewTopic("decisions", num_partitions=exposure_partitions, replication_factor=1),
+        NewTopic("drift", num_partitions=1, replication_factor=1),
     ]
     for future in admin.create_topics(topics).values():
         try:

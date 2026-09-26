@@ -14,6 +14,7 @@ from streaming.producer import KafkaSink
 from uplift.constants import FEATURE_COLS
 
 DECISIONS_TOPIC = "decisions"
+DRIFT_TOPIC = "drift"
 
 
 def threshold_for_fraction(scores, fraction: float) -> float:
@@ -21,9 +22,13 @@ def threshold_for_fraction(scores, fraction: float) -> float:
     return float(np.quantile(np.asarray(scores, dtype=float), 1 - fraction))
 
 
+def events_to_frame(events: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame([e["value"] for e in events])[FEATURE_COLS]
+
+
 def score_events(model, events: list[dict], threshold: float) -> list[dict]:
     """Score a micro-batch of exposure events. Only FEATURE_COLS reach the model."""
-    frame = pd.DataFrame([e["value"] for e in events])[FEATURE_COLS]
+    frame = events_to_frame(events)
     uplift = np.asarray(model.predict_uplift(frame), dtype=float)
     return [
         {"user_id": int(e["value"]["user_id"]), "event_time": e["value"]["event_time"],
@@ -33,8 +38,10 @@ def score_events(model, events: list[dict], threshold: float) -> list[dict]:
 
 
 def run_scorer(consumer, sink, model, threshold: float, batch_size: int = 500, poll_timeout: float = 1.0,
-               max_idle_polls: int | None = None) -> int:
-    """Consume exposures in micro-batches, score them, publish decisions. Returns events scored."""
+               max_idle_polls: int | None = None, drift_monitor=None) -> int:
+    """Consume exposures in micro-batches, score them, publish decisions. Returns events scored.
+    With a drift monitor, each full window is tested against the training reference and any
+    drifted features are published to the `drift` topic."""
     processed, idle = 0, 0
     while max_idle_polls is None or idle < max_idle_polls:
         events = consumer.poll_batch(batch_size, poll_timeout)
@@ -45,6 +52,11 @@ def run_scorer(consumer, sink, model, threshold: float, batch_size: int = 500, p
         for decision in score_events(model, events, threshold):
             sink.send(DECISIONS_TOPIC, str(decision["user_id"]), decision)
         processed += len(events)
+        if drift_monitor is not None:
+            flagged = drift_monitor.update(events_to_frame(events))
+            if flagged:
+                sink.send(DRIFT_TOPIC, "drift", {
+                    "features": flagged, "n_processed": processed, "event_time": events[-1]["value"]["event_time"]})
     sink.flush()
     return processed
 
@@ -136,6 +148,8 @@ def main() -> None:
     parser.add_argument("--fraction", type=float, default=0.3, help="share of users to treat (from the policy)")
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--postgres-dsn", default=None)
+    parser.add_argument("--reference-dir", default=None, help="processed data dir; enables drift monitoring")
+    parser.add_argument("--drift-window", type=int, default=1000)
     args = parser.parse_args()
 
     artifacts = Path(args.artifacts_dir)
@@ -146,9 +160,18 @@ def main() -> None:
     sink = KafkaSink(args.bootstrap_servers)
     if args.postgres_dsn:
         sink = FanOutSink(sink, PostgresDecisionSink(args.postgres_dsn))
+    monitor = None
+    if args.reference_dir:
+        import pyarrow.dataset as ds
+
+        from streaming.drift import DriftMonitor
+
+        reference = ds.dataset(f"{args.reference_dir}/train").head(20_000).to_pandas()[FEATURE_COLS]
+        monitor = DriftMonitor(reference, FEATURE_COLS, window_size=args.drift_window)
     consumer = KafkaBatchConsumer(args.bootstrap_servers)
     print(f"scoring with {meta['model_name']}, treating top {args.fraction:.0%} (threshold {threshold:.5f})")
-    run_scorer(consumer, sink, load_model(args.artifacts_dir), threshold, batch_size=args.batch_size)
+    run_scorer(consumer, sink, load_model(args.artifacts_dir), threshold, batch_size=args.batch_size,
+               drift_monitor=monitor)
 
 
 if __name__ == "__main__":
