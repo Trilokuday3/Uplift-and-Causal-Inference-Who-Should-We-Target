@@ -1,0 +1,633 @@
+{
+  "assumptions": {
+    "cost_per_impression": 0.5,
+    "value_per_outcome": 20.0,
+    "currency": "INR",
+    "outcome": "visit",
+    "note": "Illustrative prices, not Criteo data. Incremental outcomes are randomized-data estimates."
+  },
+  "population": 1000001,
+  "model": "causal_forest",
+  "strategies": {
+    "uplift": {
+      "score_column": "causal_forest",
+      "curve": [
+        {
+          "fraction": 0.05,
+          "n_targeted": 50000,
+          "uplift": 0.091271643,
+          "incremental_outcomes": 4563.5821493899,
+          "cost": 25000.0,
+          "revenue": 91271.6429877972,
+          "profit": 66271.6429877972
+        },
+        {
+          "fraction": 0.1,
+          "n_targeted": 100000,
+          "uplift": 0.0627912,
+          "incremental_outcomes": 6279.1199986392,
+          "cost": 50000.0,
+          "revenue": 125582.399972785,
+          "profit": 75582.399972785
+        },
+        {
+          "fraction": 0.15,
+          "n_targeted": 150000,
+          "uplift": 0.0496928321,
+          "incremental_outcomes": 7453.9248181635,
+          "cost": 75000.0,
+          "revenue": 149078.4963632695,
+          "profit": 74078.4963632695
+        },
+        {
+          "fraction": 0.2,
+          "n_targeted": 200000,
+          "uplift": 0.0409268269,
+          "incremental_outcomes": 8185.3653834807,
+          "cost": 100000.0,
+          "revenue": 163707.307669613,
+          "profit": 63707.307669613
+        },
+        {
+          "fraction": 0.25,
+          "n_targeted": 250000,
+          "uplift": 0.0353462007,
+          "incremental_outcomes": 8836.5501675525,
+          "cost": 125000.0,
+          "revenue": 176731.0033510493,
+          "profit": 51731.0033510493
+        },
+        {
+          "fraction": 0.3,
+          "n_targeted": 300000,
+          "uplift": 0.0302490706,
+          "incremental_outcomes": 9074.721168968,
+          "cost": 150000.0,
+          "revenue": 181494.4233793608,
+          "profit": 31494.4233793608
+        },
+        {
+          "fraction": 0.35,
+          "n_targeted": 350000,
+          "uplift": 0.0267254635,
+          "incremental_outcomes": 9353.9122211806,
+          "cost": 175000.0,
+          "revenue": 187078.2444236121,
+          "profit": 12078.2444236121
+        },
+        {
+          "fraction": 0.4,
+          "n_targeted": 400000,
+          "uplift": 0.0237219565,
+          "incremental_outcomes": 9488.7826079346,
+          "cost": 200000.0,
+          "revenue": 189775.652158692,
+          "profit": -10224.347841308
+        },
+        {
+          "fraction": 0.45,
+          "n_targeted": 450000,
+          "uplift": 0.0213458564,
+          "incremental_outcomes": 9605.6353742256,
+          "cost": 225000.0,
+          "revenue": 192112.707484512,
+          "profit": -32887.292515488
+        },
+        {
+          "fraction": 0.5,
+          "n_targeted": 500000,
+          "uplift": 0.0196584808,
+          "incremental_outcomes": 9829.2403870722,
+          "cost": 250000.0,
+          "revenue": 196584.8077414444,
+          "profit": -53415.1922585556
+        },
+        {
+          "fraction": 0.55,
+          "n_targeted": 550001,
+          "uplift": 0.018198377,
+          "incremental_outcomes": 10009.125535372,
+          "cost": 275000.5,
+          "revenue": 200182.5107074392,
+          "profit": -74817.9892925608
+        },
+        {
+          "fraction": 0.6,
+          "n_targeted": 600001,
+          "uplift": 0.01677964,
+          "incremental_outcomes": 10067.8007520214,
+          "cost": 300000.5,
+          "revenue": 201356.0150404285,
+          "profit": -98644.4849595715
+        },
+        {
+          "fraction": 0.65,
+          "n_targeted": 650001,
+          "uplift": 0.0157150599,
+          "incremental_outcomes": 10214.8046180397,
+          "cost": 325000.5,
+          "revenue": 204296.0923607938,
+          "profit": -120704.4076392062
+        },
+        {
+          "fraction": 0.7,
+          "n_targeted": 700001,
+          "uplift": 0.0144798562,
+          "incremental_outcomes": 10135.9138307856,
+          "cost": 350000.5,
+          "revenue": 202718.2766157125,
+          "profit": -147282.2233842875
+        },
+        {
+          "fraction": 0.75,
+          "n_targeted": 750001,
+          "uplift": 0.0135328517,
+          "incremental_outcomes": 10149.6523187039,
+          "cost": 375000.5,
+          "revenue": 202993.0463740785,
+          "profit": -172007.4536259215
+        },
+        {
+          "fraction": 0.8,
+          "n_targeted": 800001,
+          "uplift": 0.0126753693,
+          "incremental_outcomes": 10140.3081541049,
+          "cost": 400000.5,
+          "revenue": 202806.1630820975,
+          "profit": -197194.3369179025
+        },
+        {
+          "fraction": 0.85,
+          "n_targeted": 850001,
+          "uplift": 0.0120422838,
+          "incremental_outcomes": 10235.9532789865,
+          "cost": 425000.5,
+          "revenue": 204719.0655797309,
+          "profit": -220281.4344202691
+        },
+        {
+          "fraction": 0.9,
+          "n_targeted": 900001,
+          "uplift": 0.0114288607,
+          "incremental_outcomes": 10285.9860867174,
+          "cost": 450000.5,
+          "revenue": 205719.7217343476,
+          "profit": -244280.7782656524
+        },
+        {
+          "fraction": 0.95,
+          "n_targeted": 950001,
+          "uplift": 0.0108739406,
+          "incremental_outcomes": 10330.2544750133,
+          "cost": 475000.5,
+          "revenue": 206605.0895002659,
+          "profit": -268395.4104997341
+        },
+        {
+          "fraction": 1.0,
+          "n_targeted": 1000001,
+          "uplift": 0.0103434723,
+          "incremental_outcomes": 10343.4826452696,
+          "cost": 500000.5,
+          "revenue": 206869.6529053919,
+          "profit": -293130.8470946081
+        }
+      ]
+    },
+    "response_model": {
+      "score_column": "response_model",
+      "curve": [
+        {
+          "fraction": 0.05,
+          "n_targeted": 50000,
+          "uplift": 0.058828353,
+          "incremental_outcomes": 2941.4176515266,
+          "cost": 25000.0,
+          "revenue": 58828.3530305329,
+          "profit": 33828.3530305329
+        },
+        {
+          "fraction": 0.1,
+          "n_targeted": 100000,
+          "uplift": 0.0516326755,
+          "incremental_outcomes": 5163.2675542256,
+          "cost": 50000.0,
+          "revenue": 103265.3510845121,
+          "profit": 53265.3510845121
+        },
+        {
+          "fraction": 0.15,
+          "n_targeted": 150000,
+          "uplift": 0.0454102991,
+          "incremental_outcomes": 6811.5448712155,
+          "cost": 75000.0,
+          "revenue": 136230.8974243094,
+          "profit": 61230.8974243094
+        },
+        {
+          "fraction": 0.2,
+          "n_targeted": 200000,
+          "uplift": 0.0384395469,
+          "incremental_outcomes": 7687.9093778833,
+          "cost": 100000.0,
+          "revenue": 153758.1875576656,
+          "profit": 53758.1875576656
+        },
+        {
+          "fraction": 0.25,
+          "n_targeted": 250000,
+          "uplift": 0.0339526099,
+          "incremental_outcomes": 8488.1524726052,
+          "cost": 125000.0,
+          "revenue": 169763.0494521049,
+          "profit": 44763.0494521049
+        },
+        {
+          "fraction": 0.3,
+          "n_targeted": 300000,
+          "uplift": 0.0295273894,
+          "incremental_outcomes": 8858.2168255991,
+          "cost": 150000.0,
+          "revenue": 177164.3365119822,
+          "profit": 27164.3365119822
+        },
+        {
+          "fraction": 0.35,
+          "n_targeted": 350000,
+          "uplift": 0.0261429321,
+          "incremental_outcomes": 9150.0262281156,
+          "cost": 175000.0,
+          "revenue": 183000.5245623112,
+          "profit": 8000.5245623112
+        },
+        {
+          "fraction": 0.4,
+          "n_targeted": 400000,
+          "uplift": 0.0236868712,
+          "incremental_outcomes": 9474.7484877071,
+          "cost": 200000.0,
+          "revenue": 189494.969754142,
+          "profit": -10505.030245858
+        },
+        {
+          "fraction": 0.45,
+          "n_targeted": 450000,
+          "uplift": 0.0214637887,
+          "incremental_outcomes": 9658.7049154237,
+          "cost": 225000.0,
+          "revenue": 193174.0983084736,
+          "profit": -31825.9016915264
+        },
+        {
+          "fraction": 0.5,
+          "n_targeted": 500000,
+          "uplift": 0.0198159534,
+          "incremental_outcomes": 9907.9766912363,
+          "cost": 250000.0,
+          "revenue": 198159.5338247261,
+          "profit": -51840.4661752739
+        },
+        {
+          "fraction": 0.55,
+          "n_targeted": 550001,
+          "uplift": 0.0182630054,
+          "incremental_outcomes": 10044.6712333821,
+          "cost": 275000.5,
+          "revenue": 200893.4246676427,
+          "profit": -74107.0753323573
+        },
+        {
+          "fraction": 0.6,
+          "n_targeted": 600001,
+          "uplift": 0.0167733783,
+          "incremental_outcomes": 10064.0437458379,
+          "cost": 300000.5,
+          "revenue": 201280.8749167579,
+          "profit": -98719.6250832421
+        },
+        {
+          "fraction": 0.65,
+          "n_targeted": 650001,
+          "uplift": 0.0157108583,
+          "incremental_outcomes": 10212.0736310433,
+          "cost": 325000.5,
+          "revenue": 204241.4726208654,
+          "profit": -120759.0273791346
+        },
+        {
+          "fraction": 0.7,
+          "n_targeted": 700001,
+          "uplift": 0.0146281714,
+          "incremental_outcomes": 10239.7346409337,
+          "cost": 350000.5,
+          "revenue": 204794.6928186738,
+          "profit": -145205.8071813262
+        },
+        {
+          "fraction": 0.75,
+          "n_targeted": 750001,
+          "uplift": 0.0137294987,
+          "incremental_outcomes": 10297.1377733236,
+          "cost": 375000.5,
+          "revenue": 205942.7554664711,
+          "profit": -169057.7445335289
+        },
+        {
+          "fraction": 0.8,
+          "n_targeted": 800001,
+          "uplift": 0.0129038536,
+          "incremental_outcomes": 10323.0957638016,
+          "cost": 400000.5,
+          "revenue": 206461.9152760315,
+          "profit": -193538.5847239685
+        },
+        {
+          "fraction": 0.85,
+          "n_targeted": 850001,
+          "uplift": 0.0121519539,
+          "incremental_outcomes": 10329.172971344,
+          "cost": 425000.5,
+          "revenue": 206583.4594268809,
+          "profit": -218417.0405731191
+        },
+        {
+          "fraction": 0.9,
+          "n_targeted": 900001,
+          "uplift": 0.0114623874,
+          "incremental_outcomes": 10316.1601512016,
+          "cost": 450000.5,
+          "revenue": 206323.2030240317,
+          "profit": -243677.2969759683
+        },
+        {
+          "fraction": 0.95,
+          "n_targeted": 950001,
+          "uplift": 0.0108553361,
+          "incremental_outcomes": 10312.580197311,
+          "cost": 475000.5,
+          "revenue": 206251.6039462199,
+          "profit": -268748.8960537801
+        },
+        {
+          "fraction": 1.0,
+          "n_targeted": 1000001,
+          "uplift": 0.0103434723,
+          "incremental_outcomes": 10343.4826452696,
+          "cost": 500000.5,
+          "revenue": 206869.6529053919,
+          "profit": -293130.8470946081
+        }
+      ]
+    },
+    "random": {
+      "score_column": "random",
+      "curve": [
+        {
+          "fraction": 0.05,
+          "n_targeted": 50000,
+          "uplift": 0.0070376551,
+          "incremental_outcomes": 351.8827554885,
+          "cost": 25000.0,
+          "revenue": 7037.6551097705,
+          "profit": -17962.3448902295
+        },
+        {
+          "fraction": 0.1,
+          "n_targeted": 100000,
+          "uplift": 0.0080063453,
+          "incremental_outcomes": 800.6345345247,
+          "cost": 50000.0,
+          "revenue": 16012.6906904939,
+          "profit": -33987.3093095061
+        },
+        {
+          "fraction": 0.15,
+          "n_targeted": 150000,
+          "uplift": 0.0088936412,
+          "incremental_outcomes": 1334.046179167,
+          "cost": 75000.0,
+          "revenue": 26680.9235833393,
+          "profit": -48319.0764166607
+        },
+        {
+          "fraction": 0.2,
+          "n_targeted": 200000,
+          "uplift": 0.0094472076,
+          "incremental_outcomes": 1889.4415198745,
+          "cost": 100000.0,
+          "revenue": 37788.8303974901,
+          "profit": -62211.1696025099
+        },
+        {
+          "fraction": 0.25,
+          "n_targeted": 250000,
+          "uplift": 0.0101864777,
+          "incremental_outcomes": 2546.6194143646,
+          "cost": 125000.0,
+          "revenue": 50932.3882872922,
+          "profit": -74067.6117127078
+        },
+        {
+          "fraction": 0.3,
+          "n_targeted": 300000,
+          "uplift": 0.0104503459,
+          "incremental_outcomes": 3135.103781083,
+          "cost": 150000.0,
+          "revenue": 62702.0756216595,
+          "profit": -87297.9243783405
+        },
+        {
+          "fraction": 0.35,
+          "n_targeted": 350000,
+          "uplift": 0.0106754375,
+          "incremental_outcomes": 3736.4031403565,
+          "cost": 175000.0,
+          "revenue": 74728.0628071307,
+          "profit": -100271.9371928693
+        },
+        {
+          "fraction": 0.4,
+          "n_targeted": 400000,
+          "uplift": 0.0104037208,
+          "incremental_outcomes": 4161.4883131095,
+          "cost": 200000.0,
+          "revenue": 83229.76626219,
+          "profit": -116770.23373781
+        },
+        {
+          "fraction": 0.45,
+          "n_targeted": 450000,
+          "uplift": 0.0107091156,
+          "incremental_outcomes": 4819.1020397734,
+          "cost": 225000.0,
+          "revenue": 96382.0407954682,
+          "profit": -128617.9592045318
+        },
+        {
+          "fraction": 0.5,
+          "n_targeted": 500000,
+          "uplift": 0.0108735232,
+          "incremental_outcomes": 5436.7615779108,
+          "cost": 250000.0,
+          "revenue": 108735.2315582164,
+          "profit": -141264.7684417836
+        },
+        {
+          "fraction": 0.55,
+          "n_targeted": 550001,
+          "uplift": 0.0109155269,
+          "incremental_outcomes": 6003.5507199836,
+          "cost": 275000.5,
+          "revenue": 120071.0143996725,
+          "profit": -154929.4856003275
+        },
+        {
+          "fraction": 0.6,
+          "n_targeted": 600001,
+          "uplift": 0.0106284206,
+          "incremental_outcomes": 6377.0630112947,
+          "cost": 300000.5,
+          "revenue": 127541.2602258939,
+          "profit": -172459.2397741061
+        },
+        {
+          "fraction": 0.65,
+          "n_targeted": 650001,
+          "uplift": 0.0104684077,
+          "incremental_outcomes": 6804.4754827118,
+          "cost": 325000.5,
+          "revenue": 136089.5096542351,
+          "profit": -188910.9903457649
+        },
+        {
+          "fraction": 0.7,
+          "n_targeted": 700001,
+          "uplift": 0.0102463559,
+          "incremental_outcomes": 7172.4594064434,
+          "cost": 350000.5,
+          "revenue": 143449.1881288684,
+          "profit": -206551.3118711316
+        },
+        {
+          "fraction": 0.75,
+          "n_targeted": 750001,
+          "uplift": 0.0102951948,
+          "incremental_outcomes": 7721.4064185437,
+          "cost": 375000.5,
+          "revenue": 154428.1283708738,
+          "profit": -220572.3716291262
+        },
+        {
+          "fraction": 0.8,
+          "n_targeted": 800001,
+          "uplift": 0.0103173509,
+          "incremental_outcomes": 8253.8910310135,
+          "cost": 400000.5,
+          "revenue": 165077.8206202707,
+          "profit": -234922.6793797293
+        },
+        {
+          "fraction": 0.85,
+          "n_targeted": 850001,
+          "uplift": 0.0102233865,
+          "incremental_outcomes": 8689.8887615432,
+          "cost": 425000.5,
+          "revenue": 173797.7752308642,
+          "profit": -251202.7247691358
+        },
+        {
+          "fraction": 0.9,
+          "n_targeted": 900001,
+          "uplift": 0.0102220695,
+          "incremental_outcomes": 9199.8727937379,
+          "cost": 450000.5,
+          "revenue": 183997.4558747587,
+          "profit": -266003.0441252413
+        },
+        {
+          "fraction": 0.95,
+          "n_targeted": 950001,
+          "uplift": 0.0102992185,
+          "incremental_outcomes": 9784.2678558826,
+          "cost": 475000.5,
+          "revenue": 195685.357117651,
+          "profit": -279315.142882349
+        },
+        {
+          "fraction": 1.0,
+          "n_targeted": 1000001,
+          "uplift": 0.0103434723,
+          "incremental_outcomes": 10343.4826452696,
+          "cost": 500000.5,
+          "revenue": 206869.6529053919,
+          "profit": -293130.8470946081
+        }
+      ]
+    }
+  },
+  "best_by_strategy": {
+    "uplift": {
+      "fraction": 0.1,
+      "n_targeted": 100000.0,
+      "uplift": 0.0627912,
+      "incremental_outcomes": 6279.1199986392,
+      "cost": 50000.0,
+      "revenue": 125582.399972785,
+      "profit": 75582.399972785
+    },
+    "response_model": {
+      "fraction": 0.15,
+      "n_targeted": 150000.0,
+      "uplift": 0.0454102991,
+      "incremental_outcomes": 6811.5448712155,
+      "cost": 75000.0,
+      "revenue": 136230.8974243094,
+      "profit": 61230.8974243094
+    },
+    "random": {
+      "fraction": 0.05,
+      "n_targeted": 50000.0,
+      "uplift": 0.0070376551,
+      "incremental_outcomes": 351.8827554885,
+      "cost": 25000.0,
+      "revenue": 7037.6551097705,
+      "profit": -17962.3448902295
+    }
+  },
+  "operating_point": {
+    "strategy": "uplift",
+    "fraction": 0.1,
+    "n_targeted": 100000.0,
+    "uplift": 0.0627912,
+    "incremental_outcomes": 6279.1199986392,
+    "cost": 50000.0,
+    "revenue": 125582.399972785,
+    "profit": 75582.399972785
+  },
+  "segment_savings": [
+    {
+      "segment": "sure_things",
+      "n": 308520,
+      "observed_uplift": 0.0017435566,
+      "impression_cost_saved": 154260.0,
+      "value_forgone": 10758.4417631488,
+      "net_saving": 143501.5582368512
+    },
+    {
+      "segment": "sleeping_dogs",
+      "n": 21439,
+      "observed_uplift": 0.0052998182,
+      "impression_cost_saved": 10719.5,
+      "value_forgone": 2272.4560678585,
+      "net_saving": 8447.0439321415
+    },
+    {
+      "segment": "do_not_target_total",
+      "n": 329959,
+      "observed_uplift": null,
+      "impression_cost_saved": 164979.5,
+      "value_forgone": 13030.8978310074,
+      "net_saving": 151948.6021689926
+    }
+  ]
+}
