@@ -103,6 +103,9 @@ def test_train_cli_saves_model_and_test_scores(tmp_path, uplift_frame):
     meta = json.loads((artifacts / "model_meta.json").read_text())
     assert meta["model_name"] == "s_learner" and meta["outcome"] == "visit"
     assert "exposure" not in meta["feature_cols"]
+    val_scores = pd.read_parquet(artifacts / "val_scores.parquet")
+    assert {"treatment", "outcome", "random", "response_model", "s_learner"} <= set(val_scores.columns)
+    assert len(val_scores) == meta["n_val"]
     model = joblib.load(artifacts / "best_model.joblib")
     scores = pd.read_parquet(artifacts / "test_scores.parquet")
     assert {"treatment", "outcome", "random", "response_model", "s_learner"} <= set(scores.columns)

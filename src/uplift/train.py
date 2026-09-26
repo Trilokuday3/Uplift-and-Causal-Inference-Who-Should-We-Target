@@ -195,9 +195,11 @@ def run(
         out.mkdir(parents=True, exist_ok=True)
         scores_frame = pd.DataFrame({"treatment": t_test, "outcome": y_test, **test_scores})
         scores_frame.to_parquet(out / "test_scores.parquet")
+        val_scores = score_all(fitted, val)
+        pd.DataFrame({"treatment": t_val, "outcome": y_val, **val_scores}).to_parquet(out / "val_scores.parquet")
         if best:
             joblib.dump(fitted[best], out / "best_model.joblib")
-            meta = {"model_name": best, "outcome": outcome_col, "feature_cols": FEATURE_COLS, "n_train": len(train)}
+            meta = {"model_name": best, "outcome": outcome_col, "feature_cols": FEATURE_COLS, "n_train": len(train), "n_val": len(val)}
             (out / "model_meta.json").write_text(json.dumps(meta, indent=2))
             if register_model:
                 from uplift.registry import register_model as register

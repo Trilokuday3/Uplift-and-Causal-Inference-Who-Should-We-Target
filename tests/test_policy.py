@@ -114,3 +114,34 @@ def test_interpolate_curve_is_linear_between_points_and_anchored_at_origin():
     assert interpolate_curve(curve, 0.25)["profit"] == pytest.approx(2.0)  # halfway from origin (0,0)
     with pytest.raises(ValueError):
         interpolate_curve(curve, 1.5)
+
+
+def test_operating_point_is_chosen_on_validation_and_profit_reported_on_test(tmp_path, uplift_frame):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+
+    def frame(seed, flip):
+        df = uplift_frame(6000, seed=seed)
+        rng = np.random.default_rng(seed)
+        signal = df["f0"].to_numpy()
+        return pd.DataFrame({
+            "treatment": df["treatment"], "outcome": df["visit"], "random": rng.random(len(df)),
+            "response_model": rng.random(len(df)), "s_learner": -signal if flip else signal,
+        })
+
+    frame(1, flip=False).to_parquet(artifacts / "val_scores.parquet")
+    frame(2, flip=False).to_parquet(artifacts / "test_scores.parquet")
+    (artifacts / "model_meta.json").write_text(json.dumps({"model_name": "s_learner", "outcome": "visit"}))
+    out = tmp_path / "policy.json"
+    result = subprocess.run(
+        [sys.executable, "-m", "uplift.policy", "--artifacts-dir", str(artifacts), "--output", str(out)],
+        capture_output=True, text=True, env={**os.environ, "PYTHONPATH": "src"},
+    )
+    assert result.returncode == 0, result.stderr
+    res = json.loads(out.read_text())
+    op = res["operating_point"]
+    assert op["selected_on"] == "validation" and op["reported_on"] == "test"
+    test_curve = pd.DataFrame(res["strategies"]["uplift"]["curve"]).set_index("fraction")
+    assert op["profit"] == pytest.approx(test_curve.loc[op["fraction"], "profit"])
+    assert "in_sample_best_on_test" in res  # kept only as a clearly labelled optimistic reference
+    assert op["profit"] <= res["in_sample_best_on_test"]["uplift"]["profit"] + 1e-9
