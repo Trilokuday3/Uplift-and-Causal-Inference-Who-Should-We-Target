@@ -100,3 +100,17 @@ def test_policy_cli_end_to_end(tmp_path, scored):
     assert res["strategies"]["uplift"]["curve"][0]["fraction"] == pytest.approx(0.05)
     assert {r["segment"] for r in res["segment_savings"]} >= {"do_not_target_total"}
     assert n == len(scored["y"])
+
+
+def test_interpolate_curve_is_linear_between_points_and_anchored_at_origin():
+    from uplift.policy import interpolate_curve
+
+    curve = [
+        {"fraction": 0.5, "incremental_outcomes": 10.0, "profit": 4.0},
+        {"fraction": 1.0, "incremental_outcomes": 16.0, "profit": 2.0},
+    ]
+    assert interpolate_curve(curve, 0.5)["incremental_outcomes"] == pytest.approx(10.0)
+    assert interpolate_curve(curve, 0.75)["incremental_outcomes"] == pytest.approx(13.0)
+    assert interpolate_curve(curve, 0.25)["profit"] == pytest.approx(2.0)  # halfway from origin (0,0)
+    with pytest.raises(ValueError):
+        interpolate_curve(curve, 1.5)

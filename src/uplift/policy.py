@@ -136,3 +136,20 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def interpolate_curve(curve: list[dict], fraction: float) -> dict:
+    """Linearly interpolate every numeric column of a budget curve at `fraction`.
+
+    The curve is anchored at the origin (targeting nobody yields nothing), so budgets below the
+    first grid point interpolate from zero."""
+    points = sorted(curve, key=lambda r: r["fraction"])
+    if not 0 < fraction <= points[-1]["fraction"]:
+        raise ValueError(f"budget must be in (0, {points[-1]['fraction']}]")
+    keys = [k for k, v in points[0].items() if isinstance(v, (int, float)) and k != "fraction"]
+    xs = [0.0] + [p["fraction"] for p in points]
+    result = {"fraction": fraction}
+    for key in keys:
+        ys = [0.0] + [p[key] for p in points]
+        result[key] = float(np.interp(fraction, xs, ys))
+    return result
