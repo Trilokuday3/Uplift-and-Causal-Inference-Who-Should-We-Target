@@ -4,12 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
+import joblib
 import mlflow
 import numpy as np
 import optuna
 import pandas as pd
 
-from uplift.constants import TREATMENT_COL, VISIT_COL
+from uplift.constants import FEATURE_COLS, TREATMENT_COL, VISIT_COL
 from uplift.evaluate import (
     bootstrap_qini_ci,
     decile_table,
@@ -127,6 +128,7 @@ def run(
     mlflow_uri: str = "sqlite:///mlflow.db",
     names: list[str] | None = None,
     seed: int = 42,
+    artifacts_dir: str | None = None,
 ) -> dict:
     names = names or list(MODEL_REGISTRY)
     tracking_uri = mlflow_uri
@@ -185,6 +187,16 @@ def run(
                 y_test, t_test, test_scores[best], test_scores["response_model"]
             ).to_dict(orient="records")
 
+    if artifacts_dir:
+        out = Path(artifacts_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        scores_frame = pd.DataFrame({"treatment": t_test, "outcome": y_test, **test_scores})
+        scores_frame.to_parquet(out / "test_scores.parquet")
+        if best:
+            joblib.dump(fitted[best], out / "best_model.joblib")
+            meta = {"model_name": best, "outcome": outcome_col, "feature_cols": FEATURE_COLS, "n_train": len(train)}
+            (out / "model_meta.json").write_text(json.dumps(meta, indent=2))
+
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(json.dumps(_clean(results), indent=2))
     return results
@@ -202,6 +214,7 @@ def main() -> None:
     parser.add_argument("--mlflow-uri", default="sqlite:///mlflow.db", help="local SQLite store by default")
     parser.add_argument("--models", default=None, help="comma-separated subset of the registry")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--artifacts-dir", default=None, help="save best model + test scores here")
     args = parser.parse_args()
     results = run(
         args.input_dir,
@@ -214,6 +227,7 @@ def main() -> None:
         mlflow_uri=args.mlflow_uri,
         names=args.models.split(",") if args.models else None,
         seed=args.seed,
+        artifacts_dir=args.artifacts_dir,
     )
     for name, m in results["test_metrics"].items():
         print(f"{name:22s} qini_auc={m['qini_auc']:.5f}  CI=[{m['ci_low']:.5f}, {m['ci_high']:.5f}]")

@@ -78,3 +78,32 @@ def test_train_cli_reports_paired_difference_against_response_model(tmp_path, up
     assert results["reference_model"] == "response_model"
     assert set(results["test_metrics"]["s_learner"]["diff_vs_reference"]) == {"estimate", "ci_low", "ci_high"}
     assert "untuned_val_metrics" in results
+
+
+def test_train_cli_saves_model_and_test_scores(tmp_path, uplift_frame):
+    import joblib
+    import pandas as pd
+
+    input_dir = _write_splits(tmp_path, uplift_frame)
+    artifacts = tmp_path / "artifacts"
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "uplift.train",
+            "--input-dir", str(input_dir), "--output", str(tmp_path / "r.json"),
+            "--models", "random,response_model,s_learner", "--sample-size", "1500",
+            "--n-trials", "1", "--n-boot", "10",
+            "--mlflow-uri", "sqlite:///" + (tmp_path / "mlflow.db").as_posix(),
+            "--artifacts-dir", str(artifacts),
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": "src", "MLFLOW_DISABLE_AGENT_HINT": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    meta = json.loads((artifacts / "model_meta.json").read_text())
+    assert meta["model_name"] == "s_learner" and meta["outcome"] == "visit"
+    assert "exposure" not in meta["feature_cols"]
+    model = joblib.load(artifacts / "best_model.joblib")
+    scores = pd.read_parquet(artifacts / "test_scores.parquet")
+    assert {"treatment", "outcome", "random", "response_model", "s_learner"} <= set(scores.columns)
+    assert len(model.predict_uplift(scores.iloc[:5].assign(**{f"f{i}": 0.0 for i in range(12)})[[f"f{i}" for i in range(12)]])) == 5
