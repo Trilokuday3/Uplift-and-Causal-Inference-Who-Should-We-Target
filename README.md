@@ -50,7 +50,7 @@ about Criteo's real ad economics. Rupee figures are labelled assumptions, not Cr
 ## Honest limits
 
 - Model training used a 500k-row subsample and 1M test rows, 5 Optuna trials per tuned model and
-  100 bootstrap resamples, on a Windows laptop. Full-split training was not run, and the near-tie
+  100 bootstrap resamples, on a Windows laptop. Full-split training (`make train-full`) has not been run, and the near-tie
   with the response model is the fragile part of the conclusion.
 - **Kafka path, run once on a small sample.** Against a live single-broker Kafka (`docker compose`),
   the replay producer sent 3,000 exposures plus 3,000 delayed outcomes; the scorer consumed the
@@ -60,11 +60,11 @@ about Criteo's real ad economics. Rupee figures are labelled assumptions, not Cr
   their containers answered `/health`, `/score`, `/policy` and the Streamlit health check. This was a
   single functional run, not a load test: the 17k events/s figure is in-process scoring only, and
   the `scorer`/`mlflow` compose services were not started.
-- The MLflow server in the compose file is not wired into model loading: the scorer and API load the
-  saved model from `models/best_model.joblib`. Training logs runs to a local SQLite MLflow store.
+- Model loading: the scorer and API read `models/best_model.joblib` by default. Setting `MLFLOW_MODEL_URI`
+  (training prints/records `best_model_uri`) loads it from MLflow instead; that path is not exercised by CI.
 - Drift detection uses a Bonferroni-corrected KS test (SciPy) rather than Evidently, to avoid a
   heavy dependency; it is unit-tested, and the producer can inject a mid-stream shift
-  (`--drift-feature f0`), but no live drift demo run is recorded.
+  (`--drift-feature f0`), `make drift-demo` replays it and writes `docs/drift_demo.json`, but no run is recorded yet.
 
 ## Run it
 
