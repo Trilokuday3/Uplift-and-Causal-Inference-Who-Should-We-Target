@@ -1,4 +1,4 @@
-.PHONY: data ab-test train policy replay replay-files stream-files stream score benchmark serve dashboard up down test
+.PHONY: data ab-test train policy train-full drift-demo load-test replay replay-files stream-files stream score benchmark serve dashboard up down test
 
 DATA_DIR ?= data
 RAW_CSV ?= $(DATA_DIR)/raw/criteo-uplift-v2.1.csv
@@ -18,6 +18,17 @@ ab-test:
 
 train:
 	python -m uplift.train --input-dir $(PROCESSED_DIR) --output docs/uplift_results.json --artifacts-dir $(MODELS_DIR)
+
+# Full-split training (hours on a laptop). Override N_TRIALS / N_BOOT to taste.
+train-full:
+	python -m uplift.train --input-dir $(PROCESSED_DIR) --output docs/uplift_results_full.json --artifacts-dir $(MODELS_DIR)_full --sample-size 999999999 --n-trials 30 --n-boot 200
+
+drift-demo:
+	python -m streaming.drift_demo --input-dir $(PROCESSED_DIR)
+
+# Terminal 1: make load-test; terminal 2: make score; terminal 3: make replay EPS=20000 LIMIT=200000
+load-test:
+	python -m streaming.load_test --bootstrap-servers $(KAFKA) --expected $(LIMIT)
 
 policy:
 	python -m uplift.policy --artifacts-dir $(MODELS_DIR) --output docs/policy_results.json

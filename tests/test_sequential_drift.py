@@ -69,3 +69,18 @@ def test_drift_monitor_flags_injected_shift_within_two_windows(reference):
     assert flagged_windows and flagged_windows[0][0] <= 5 + 1
     assert all(w >= 4 for w, _ in flagged_windows)
     assert flagged_windows[0][1] == ["f0"]
+
+
+def test_drift_demo_flags_only_after_shift():
+    import numpy as np
+    import pandas as pd
+
+    from streaming.drift_demo import run_demo
+    from uplift.constants import FEATURE_COLS
+
+    rng = np.random.default_rng(0)
+    make = lambda n: pd.DataFrame({**{c: rng.normal(size=n) for c in FEATURE_COLS},
+                                   "treatment": rng.integers(0, 2, n), "visit": rng.integers(0, 2, n),
+                                   "conversion": 0, "exposure": 0})
+    res = run_demo(make(5000), make(4000), "f0", 3.0, limit=4000, window=500)
+    assert res["first_flagged_row"] is not None and res["first_flagged_row"] >= 1500
