@@ -12,3 +12,4 @@ uvicorn>=0.29
 streamlit>=1.33
 confluent-kafka>=2.3
 psycopg2-binary>=2.9
+mlflow-skinny>=2.12  # only used when MLFLOW_MODEL_URI is set

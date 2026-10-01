@@ -196,6 +196,11 @@ def run(
             joblib.dump(fitted[best], out / "best_model.joblib")
             meta = {"model_name": best, "outcome": outcome_col, "feature_cols": FEATURE_COLS, "n_train": len(train)}
             (out / "model_meta.json").write_text(json.dumps(meta, indent=2))
+            mlflow.set_tracking_uri(tracking_uri)
+            mlflow.set_experiment("uplift")
+            with mlflow.start_run(run_name=f"best_model_{best}") as run:
+                mlflow.log_artifact(str(out / "best_model.joblib"))
+            results["best_model_uri"] = f"runs:/{run.info.run_id}/best_model.joblib"
 
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(json.dumps(_clean(results), indent=2))

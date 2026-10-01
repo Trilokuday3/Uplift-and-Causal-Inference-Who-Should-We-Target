@@ -5,13 +5,13 @@ import json
 import time
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 
 from streaming.events import EXPOSURES_TOPIC
 from streaming.producer import KafkaSink
 from uplift.constants import FEATURE_COLS
+from uplift.loading import load_model  # noqa: F401  (re-exported; honours MLFLOW_MODEL_URI)
 
 DECISIONS_TOPIC = "decisions"
 
@@ -125,8 +125,6 @@ class FanOutSink:
             sink.flush()
 
 
-def load_model(artifacts_dir: str):
-    return joblib.load(Path(artifacts_dir) / "best_model.joblib")
 
 
 def main() -> None:

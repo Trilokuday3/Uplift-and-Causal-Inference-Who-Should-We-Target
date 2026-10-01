@@ -4,13 +4,13 @@ import json
 import os
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from uplift.constants import FEATURE_COLS
+from uplift.loading import load_model
 from uplift.policy import interpolate_curve
 
 
@@ -74,7 +74,7 @@ def create_app_from_env() -> FastAPI:
     if (artifacts / "best_model.joblib").exists() and (artifacts / "model_meta.json").exists():
         meta = json.loads((artifacts / "model_meta.json").read_text())
         name = meta["model_name"]
-        model = joblib.load(artifacts / "best_model.joblib")
+        model = load_model(artifacts)
         fraction = float(os.environ.get("TREAT_FRACTION", policy["operating_point"]["fraction"] if policy else 0.3))
         scores = pd.read_parquet(artifacts / "test_scores.parquet")[name]
         threshold = float(np.quantile(scores.to_numpy(), 1 - fraction))
