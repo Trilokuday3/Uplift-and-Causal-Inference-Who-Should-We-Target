@@ -65,5 +65,17 @@ services:
     volumes:
       - ./docs:/app/docs:ro
 
+  # One-off batch tooling (ETL, training, tests). Run: docker compose run --rm batch <command>
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile.batch
+    profiles: ["batch"]
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      KAFKA: kafka:9092
+
 volumes:
   mlflow-data:
