@@ -103,3 +103,36 @@ def test_run_scorer_raises_no_drift_alert_on_a_stationary_stream(uplift_frame):
     sink = ListSink()
     run_scorer(FakeConsumer(events, 100), sink, LinearModel(), 0.0, batch_size=100, max_idle_polls=1, drift_monitor=monitor)
     assert not [1 for topic, _, _ in sink.messages if topic == DRIFT_TOPIC]
+
+
+def test_decode_message_skips_poison_messages():
+    from streaming.scorer import decode_message
+
+    assert decode_message("exposures", b"7", b'{"user_id": 7}') == {
+        "topic": "exposures", "key": "7", "value": {"user_id": 7}}
+    assert decode_message("exposures", None, b'{"user_id": 7}')["key"] == ""
+    assert decode_message("exposures", b"7", b"not json") is None
+    assert decode_message("exposures", b"7", None) is None
+
+
+def test_run_scorer_flushes_the_sink_before_committing_offsets(exposure_events):
+    calls = []
+
+    class Sink(ListSink):
+        def flush(self):
+            calls.append("flush")
+
+    class CommittingConsumer(FakeConsumer):
+        def commit(self):
+            calls.append("commit")
+
+    run_scorer(CommittingConsumer(exposure_events, 100), Sink(), LinearModel(), 0.0, batch_size=100, max_idle_polls=1)
+    batches = -(-len(exposure_events) // 100)
+    assert calls == ["flush", "commit"] * batches
+
+
+def test_postgres_sink_is_idempotent_on_replayed_decisions():
+    from streaming.scorer import PostgresDecisionSink
+
+    assert "PRIMARY KEY" in PostgresDecisionSink.DDL
+    assert "ON CONFLICT (user_id) DO NOTHING" in PostgresDecisionSink.INSERT

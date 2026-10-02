@@ -40,3 +40,33 @@ def test_stream_join_matches_batch_ate(spark, uplift_frame, tmp_path):
     assert acc.n_rows == len(df)
     assert consistency_check(acc.total_ate()["ate"], batch_ate, tol=0.01)
     assert len(acc.running_ate()) >= 2
+
+
+def test_running_ate_survives_windows_where_an_arm_has_no_rows_yet():
+    acc = WindowAccumulator(window_seconds=60)
+    acc.update(pd.DataFrame({"exposure_time": [1.0, 2.0], "treatment": [1, 1], "visit": [1, 0]}))
+    acc.update(pd.DataFrame({"exposure_time": [65.0, 66.0], "treatment": [1, 0], "visit": [1, 0]}))
+    running = acc.running_ate()
+    assert len(running) == 2
+    assert np.isnan(running["ate"].iloc[0])  # no control users yet, so no estimate
+    assert np.isfinite(running["ate"].iloc[1])
+
+
+def test_empty_accumulator_raises_a_clear_error():
+    with pytest.raises(ValueError, match="no joined events"):
+        WindowAccumulator().total_ate()
+
+
+def test_rerunning_the_stream_job_with_the_same_checkpoint_gives_the_same_result(spark, uplift_frame, tmp_path):
+    df = uplift_frame(300, seed=14)
+    df["conversion"] = 0
+    exposures, outcomes = build_events(df, seed=2, eps=20, lag_range=(0.5, 3.0))
+    (tmp_path / "exp").mkdir()
+    (tmp_path / "out").mkdir()
+    exposures.to_parquet(tmp_path / "exp" / "part-0.parquet")
+    outcomes.to_parquet(tmp_path / "out" / "part-0.parquet")
+    args = (spark, str(tmp_path / "exp"), str(tmp_path / "out"), str(tmp_path / "ckpt"))
+    first = run_stream_job(*args)
+    second = run_stream_job(*args)
+    assert second.n_rows == first.n_rows == len(df)
+    assert second.total_ate()["ate"] == pytest.approx(first.total_ate()["ate"])

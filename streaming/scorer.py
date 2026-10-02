@@ -22,6 +22,17 @@ def threshold_for_fraction(scores, fraction: float) -> float:
     return float(np.quantile(np.asarray(scores, dtype=float), 1 - fraction))
 
 
+def decode_message(topic: str, key: bytes | None, value: bytes | None) -> dict | None:
+    """Decode one Kafka message; returns None for poison messages (undecodable or empty payload)."""
+    if value is None:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return {"topic": topic, "key": key.decode(errors="replace") if key else "", "value": parsed}
+
+
 def events_to_frame(events: list[dict]) -> pd.DataFrame:
     return pd.DataFrame([e["value"] for e in events])[FEATURE_COLS]
 
@@ -57,7 +68,10 @@ def run_scorer(consumer, sink, model, threshold: float, batch_size: int = 500, p
             if flagged:
                 sink.send(DRIFT_TOPIC, "drift", {
                     "features": flagged, "n_processed": processed, "event_time": events[-1]["value"]["event_time"]})
-    sink.flush()
+        # At-least-once: offsets are committed only after this batch's decisions are flushed.
+        sink.flush()
+        if hasattr(consumer, "commit"):
+            consumer.commit()
     return processed
 
 
@@ -85,26 +99,28 @@ class KafkaBatchConsumer:
         from confluent_kafka import Consumer
 
         self._consumer = Consumer(
-            {"bootstrap.servers": bootstrap_servers, "group.id": group_id, "auto.offset.reset": "earliest"}
+            {"bootstrap.servers": bootstrap_servers, "group.id": group_id, "auto.offset.reset": "earliest",
+             "enable.auto.commit": False}
         )
         self._consumer.subscribe([topic])
 
     def poll_batch(self, n: int, timeout: float) -> list[dict]:
         messages = self._consumer.consume(num_messages=n, timeout=timeout)
-        return [
-            {"topic": m.topic(), "key": m.key().decode(), "value": json.loads(m.value())}
-            for m in messages
-            if m.error() is None
-        ]
+        decoded = (decode_message(m.topic(), m.key(), m.value()) for m in messages if m.error() is None)
+        return [d for d in decoded if d is not None]
+
+    def commit(self) -> None:
+        self._consumer.commit(asynchronous=False)
 
 
 class PostgresDecisionSink:
     """Mirrors decisions into Postgres (requires psycopg2, imported lazily)."""
 
     DDL = (
-        "CREATE TABLE IF NOT EXISTS decisions (user_id BIGINT, event_time DOUBLE PRECISION, "
+        "CREATE TABLE IF NOT EXISTS decisions (user_id BIGINT PRIMARY KEY, event_time DOUBLE PRECISION, "
         "uplift DOUBLE PRECISION, treat BOOLEAN)"
     )
+    INSERT = "INSERT INTO decisions VALUES (%s, %s, %s, %s) ON CONFLICT (user_id) DO NOTHING"
 
     def __init__(self, dsn: str):
         import psycopg2
@@ -115,10 +131,7 @@ class PostgresDecisionSink:
 
     def send(self, topic: str, key: str, value: dict) -> None:
         with self._conn, self._conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO decisions VALUES (%s, %s, %s, %s)",
-                (value["user_id"], value["event_time"], value["uplift"], value["treat"]),
-            )
+            cur.execute(self.INSERT, (value["user_id"], value["event_time"], value["uplift"], value["treat"]))
 
     def flush(self) -> None:
         pass

@@ -84,6 +84,12 @@ def write_event_files(exposures: pd.DataFrame, outcomes: pd.DataFrame, out_dir) 
     for name, frame in (("exposures", exposures), ("outcomes", outcomes)):
         (out / name).mkdir(parents=True, exist_ok=True)
         frame.to_parquet(out / name / "part-0.parquet")
+    write_meta(exposures, outcomes, out)
+
+
+def write_meta(exposures: pd.DataFrame, outcomes: pd.DataFrame, out_dir) -> None:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
     joined = exposures[["user_id", "treatment"]].merge(outcomes[["user_id", "visit"]], on="user_id")
     rates = joined.groupby("treatment")["visit"].mean()
     meta = {"batch_ate": float(rates[1] - rates[0]), "n_events": int(len(joined))}
@@ -116,6 +122,7 @@ def main() -> None:
         write_event_files(exposures, outcomes, args.out_dir)
         print(f"simulated real-time replay (files): wrote {len(exposures)} exposures to {args.out_dir}")
         return
+    write_meta(exposures, outcomes, args.out_dir)
     create_topics(args.bootstrap_servers)
     sent = replay(merged_events(exposures, outcomes), KafkaSink(args.bootstrap_servers), speed=args.speed)
     print(f"simulated real-time replay: sent {sent} events")
