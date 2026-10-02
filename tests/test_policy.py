@@ -145,3 +145,16 @@ def test_operating_point_is_chosen_on_validation_and_profit_reported_on_test(tmp
     assert op["profit"] == pytest.approx(test_curve.loc[op["fraction"], "profit"])
     assert "in_sample_best_on_test" in res  # kept only as a clearly labelled optimistic reference
     assert op["profit"] <= res["in_sample_best_on_test"]["uplift"]["profit"] + 1e-9
+
+
+def test_interpolate_curve_does_not_shrink_rate_columns_toward_zero():
+    from uplift.policy import interpolate_curve
+
+    curve = [
+        {"fraction": 0.5, "n_targeted": 500, "uplift": 0.06, "incremental_outcomes": 30.0, "profit": 10.0},
+        {"fraction": 1.0, "n_targeted": 1000, "uplift": 0.01, "incremental_outcomes": 10.0, "profit": -5.0},
+    ]
+    point = interpolate_curve(curve, 0.25)
+    assert point["uplift"] == pytest.approx(0.06)  # a rate, not a count: do not anchor at the origin
+    assert point["n_targeted"] == pytest.approx(250)
+    assert point["incremental_outcomes"] == pytest.approx(15.0)

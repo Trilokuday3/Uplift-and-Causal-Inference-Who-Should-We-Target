@@ -9,6 +9,8 @@ import pandas as pd
 
 from uplift.evaluate import segment_table
 
+# Totals that are zero when nobody is targeted; everything else on a curve is a rate.
+ANCHORED_AT_ZERO = {"n_targeted", "incremental_outcomes", "cost", "revenue", "profit"}
 DEFAULT_FRACTIONS = [round(f, 2) for f in np.arange(0.05, 1.0001, 0.05)]
 
 
@@ -89,10 +91,12 @@ def interpolate_curve(curve: list[dict], fraction: float) -> dict:
     if not 0 < fraction <= points[-1]["fraction"]:
         raise ValueError(f"budget must be in (0, {points[-1]['fraction']}]")
     keys = [k for k, v in points[0].items() if isinstance(v, (int, float)) and k != "fraction"]
-    xs = [0.0] + [p["fraction"] for p in points]
     result = {"fraction": fraction}
     for key in keys:
-        ys = [0.0] + [p[key] for p in points]
+        if key in ANCHORED_AT_ZERO:
+            xs, ys = [0.0] + [p["fraction"] for p in points], [0.0] + [p[key] for p in points]
+        else:  # rates such as `uplift` do not shrink toward 0 as the budget shrinks
+            xs, ys = [p["fraction"] for p in points], [p[key] for p in points]
         result[key] = float(np.interp(fraction, xs, ys))
     return result
 
