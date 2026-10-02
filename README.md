@@ -40,9 +40,9 @@ about Criteo's real ad economics. Rupee figures are labelled assumptions, not Cr
 - **Splits.** Stratified on treatment x visit with a content-hash ordering, so the split is
   identical regardless of Spark partitioning. Tuning and model selection use validation only; the
   test split is scored once.
-- **Class transformation** is reweighted for the 85/15 treatment split. The unweighted version
-  behaves like a response model on this data (it scored 0.0856 vs 0.0860 for the response model;
-  reweighted it scores 0.0626).
+- **Class transformation** is reweighted for the 85/15 treatment split; unweighted, it behaves like
+  a response model on this data (near-identical Qini AUC in an ad-hoc comparison, not reproduced in
+  the committed results). Reweighted, it scores 0.063 Qini AUC (`docs/uplift_results.json`).
 - **Peeking demo.** On the replayed stream the naive p-value first drops below 0.05 at n = 8,000,
   while the always-valid mSPRT confidence sequence first excludes zero at n = 46,500. The wider
   sequence is the price of being valid however often you look.
@@ -55,16 +55,22 @@ about Criteo's real ad economics. Rupee figures are labelled assumptions, not Cr
 - **Kafka path, run once on a small sample.** Against a live single-broker Kafka (`docker compose`),
   the replay producer sent 3,000 exposures plus 3,000 delayed outcomes; the scorer consumed the
   exposures, scored them with the real causal-forest model and wrote 3,000 decisions to both the
-  `decisions` topic and Postgres (329 treated at a 10% target); and the Spark job read both topics,
-  joined all 3,000 and reproduced the batch ATE exactly. The API and dashboard images were built and
-  their containers answered `/health`, `/score`, `/policy` and the Streamlit health check. This was a
-  single functional run, not a load test: the 17k events/s figure is in-process scoring only, and
-  the `scorer`/`mlflow` compose services were not started.
+  `decisions` topic and Postgres; and the Spark job joined all 3,000 and reproduced the batch ATE
+  exactly (`docs/streaming_kafka_results.json`). The 329-treated-at-10%-target count was read off
+  Postgres during that run and wasn't captured to a committed artifact, so treat it as observed, not
+  reproducible from this repo. The API and dashboard images were built and their containers answered
+  `/health`, `/score`, `/policy` and the Streamlit health check. This was a single functional run,
+  not a load test: the 17k events/s figure is in-process scoring only, and the `scorer`/`mlflow`
+  compose services were not started.
 - The MLflow server in the compose file is not wired into model loading: the scorer and API load the
   saved model from `models/best_model.joblib`. Training logs runs to a local SQLite MLflow store.
 - Drift detection uses a Bonferroni-corrected KS test (SciPy) rather than Evidently, to avoid a
   heavy dependency; it is unit-tested, and the producer can inject a mid-stream shift
   (`--drift-feature f0`), but no live drift demo run is recorded.
+- "Streaming ATE equals batch exactly" compares the Spark job's running ATE against a batch ATE
+  computed from the *same replayed rows* (the producer's `meta.json`), not against the full
+  classic A/B test on the whole test split (`docs/ab_test_results.json`). It proves the streaming
+  join doesn't lose or double-count events, not that streaming and full-sample batch analysis agree.
 
 ## Run it
 
