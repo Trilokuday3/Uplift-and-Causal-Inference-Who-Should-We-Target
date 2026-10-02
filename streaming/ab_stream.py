@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -38,8 +41,12 @@ class WindowAccumulator:
     def running_ate(self) -> pd.DataFrame:
         """Cumulative ATE (visit rate treated - control) with a normal-approx 95% CI, per window."""
         rows = self.rows()
+        if rows.empty:
+            raise ValueError("no joined events yet")
         rows["window_start"] = (np.floor(rows["exposure_time"] / self.window_seconds) * self.window_seconds).astype(int)
         grouped = rows.groupby(["window_start", "treatment"])["visit"].agg(["count", "sum"]).unstack("treatment", fill_value=0)
+        # A window range can have only one arm so far (control is 15% of users); keep both columns.
+        grouped = grouped.reindex(columns=pd.MultiIndex.from_product([["count", "sum"], [0, 1]]), fill_value=0)
         out = pd.DataFrame(index=grouped.index)
         out["n_treated"] = grouped[("count", 1)].cumsum()
         out["n_control"] = grouped[("count", 0)].cumsum()
@@ -108,6 +115,7 @@ def run_stream_job(
     window_seconds: int = 60,
 ) -> WindowAccumulator:
     """Process file-based exposure/outcome streams to completion (Trigger.AvailableNow)."""
+    shutil.rmtree(checkpoint, ignore_errors=True)  # a reused checkpoint marks old files as processed
     accumulator = WindowAccumulator(window_seconds)
     joined = join_streams(read_file_stream(spark, exposures_path), read_file_stream(spark, outcomes_path))
     query = (
@@ -157,16 +165,23 @@ def main() -> None:
     parser.add_argument("--exposures-path", default="data/stream/exposures")
     parser.add_argument("--outcomes-path", default="data/stream/outcomes")
     parser.add_argument("--bootstrap-servers", default="localhost:9092")
-    parser.add_argument("--checkpoint", default="data/stream/checkpoint")
+    parser.add_argument("--checkpoint", default=None, help="default: a fresh temp dir (never reuse across runs)")
     parser.add_argument("--output", default="docs/streaming_results.json")
-    parser.add_argument("--timeout", type=int, default=120, help="seconds to run in kafka mode")
+    parser.add_argument("--timeout", type=int, default=600, help="max seconds to run in kafka mode")
+    parser.add_argument("--expected-rows", type=int, default=None, help="kafka mode: stop once this many events joined")
     parser.add_argument("--batch-ate", type=float, default=None, help="batch ATE to check consistency against")
+    parser.add_argument("--meta", default=None, help="meta.json from the producer (supplies --batch-ate)")
     args = parser.parse_args()
 
+    checkpoint = args.checkpoint or tempfile.mkdtemp(prefix="ab_stream_ckpt_")
+    if args.meta:
+        meta = json.loads(Path(args.meta).read_text())
+        args.batch_ate = meta["batch_ate"] if args.batch_ate is None else args.batch_ate
+        args.expected_rows = args.expected_rows or meta["n_events"]
     spark = build_spark(kafka=args.source == "kafka")
     spark.sparkContext.setLogLevel("ERROR")
     if args.source == "files":
-        accumulator = run_stream_job(spark, args.exposures_path, args.outcomes_path, args.checkpoint)
+        accumulator = run_stream_job(spark, args.exposures_path, args.outcomes_path, checkpoint)
     else:
         accumulator = WindowAccumulator()
         joined = join_streams(
@@ -175,17 +190,20 @@ def main() -> None:
         )
         query = (
             joined.writeStream.foreachBatch(lambda batch, _id: accumulator.update(batch.toPandas()))
-            .option("checkpointLocation", args.checkpoint)
+            .option("checkpointLocation", checkpoint)
             .trigger(processingTime="5 seconds")
             .start()
         )
-        query.awaitTermination(args.timeout)
+        deadline = time.time() + args.timeout
+        while time.time() < deadline and not (args.expected_rows and accumulator.n_rows >= args.expected_rows):
+            query.awaitTermination(2)
         query.stop()
 
     total = accumulator.total_ate()
     results = {
         "label": "simulated real-time replay",
         "rows_joined": accumulator.n_rows,
+        "complete": args.expected_rows is None or accumulator.n_rows >= args.expected_rows,
         "total": total,
         "running_ate": accumulator.running_ate().to_dict(orient="records"),
         "sequential": sequential_report(accumulator),
@@ -195,6 +213,8 @@ def main() -> None:
         results["consistent_with_batch_within_1pct"] = consistency_check(total["ate"], args.batch_ate)
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(json.dumps(results, indent=2, default=float))
+    if not results["complete"]:
+        print(f"WARNING: only {accumulator.n_rows} of {args.expected_rows} expected events joined before the timeout")
     print(f"streaming ATE {total['ate']:.5f} over {accumulator.n_rows} joined events")
 
 

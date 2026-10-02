@@ -9,6 +9,8 @@ import pandas as pd
 
 from uplift.evaluate import segment_table
 
+# Totals that are zero when nobody is targeted; everything else on a curve is a rate.
+ANCHORED_AT_ZERO = {"n_targeted", "incremental_outcomes", "cost", "revenue", "profit"}
 DEFAULT_FRACTIONS = [round(f, 2) for f in np.arange(0.05, 1.0001, 0.05)]
 
 
@@ -80,6 +82,25 @@ def segment_savings(
     return pd.DataFrame(rows + [total])
 
 
+def interpolate_curve(curve: list[dict], fraction: float) -> dict:
+    """Linearly interpolate every numeric column of a budget curve at `fraction`.
+
+    The curve is anchored at the origin (targeting nobody yields nothing), so budgets below the
+    first grid point interpolate from zero."""
+    points = sorted(curve, key=lambda r: r["fraction"])
+    if not 0 < fraction <= points[-1]["fraction"]:
+        raise ValueError(f"budget must be in (0, {points[-1]['fraction']}]")
+    keys = [k for k, v in points[0].items() if isinstance(v, (int, float)) and k != "fraction"]
+    result = {"fraction": fraction}
+    for key in keys:
+        if key in ANCHORED_AT_ZERO:
+            xs, ys = [0.0] + [p["fraction"] for p in points], [0.0] + [p[key] for p in points]
+        else:  # rates such as `uplift` do not shrink toward 0 as the budget shrinks
+            xs, ys = [p["fraction"] for p in points], [p[key] for p in points]
+        result[key] = float(np.interp(fraction, xs, ys))
+    return result
+
+
 def _records(df: pd.DataFrame) -> list[dict]:
     return json.loads(df.to_json(orient="records"))
 
@@ -91,12 +112,27 @@ def run(artifacts_dir: str, output: str, cost_per_impression: float, value_per_o
     y, t = scores["outcome"].to_numpy(), scores["treatment"].to_numpy()
     columns = {"uplift": meta["model_name"], "response_model": "response_model", "random": "random"}
 
-    strategies, best_points = {}, {}
+    val_path = artifacts / "val_scores.parquet"
+    val = pd.read_parquet(val_path) if val_path.exists() else None
+
+    strategies, best_points, in_sample_points = {}, {}, {}
     for strategy, column in columns.items():
         impact = business_impact(budget_curve(y, t, scores[column].to_numpy()), cost_per_impression, value_per_outcome)
-        best = operating_point(impact)
+        in_sample = operating_point(impact)
+        if val is not None:
+            # Pick the budget on validation, then read the profit at that budget off the test curve,
+            # so the reported number is not the best of the grid on the very data it is scored on.
+            val_impact = business_impact(
+                budget_curve(val["outcome"].to_numpy(), val["treatment"].to_numpy(), val[column].to_numpy()),
+                cost_per_impression, value_per_outcome,
+            )
+            fraction = operating_point(val_impact)["fraction"]
+            chosen, selected_on = impact[impact["fraction"] == fraction].iloc[0], "validation"
+        else:
+            chosen, selected_on = in_sample, "test (in-sample, no validation scores found)"
         strategies[strategy] = {"score_column": column, "curve": _records(impact)}
-        best_points[strategy] = json.loads(best.to_json())
+        best_points[strategy] = {**json.loads(chosen.to_json()), "selected_on": selected_on, "reported_on": "test"}
+        in_sample_points[strategy] = json.loads(in_sample.to_json())
 
     savings = segment_savings(
         y, t, scores[meta["model_name"]].to_numpy(), scores["response_model"].to_numpy(),
@@ -114,6 +150,7 @@ def run(artifacts_dir: str, output: str, cost_per_impression: float, value_per_o
         "model": meta["model_name"],
         "strategies": strategies,
         "best_by_strategy": best_points,
+        "in_sample_best_on_test": in_sample_points,
         "operating_point": {"strategy": "uplift", **best_points["uplift"]},
         "segment_savings": _records(savings),
     }
@@ -136,20 +173,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-def interpolate_curve(curve: list[dict], fraction: float) -> dict:
-    """Linearly interpolate every numeric column of a budget curve at `fraction`.
-
-    The curve is anchored at the origin (targeting nobody yields nothing), so budgets below the
-    first grid point interpolate from zero."""
-    points = sorted(curve, key=lambda r: r["fraction"])
-    if not 0 < fraction <= points[-1]["fraction"]:
-        raise ValueError(f"budget must be in (0, {points[-1]['fraction']}]")
-    keys = [k for k, v in points[0].items() if isinstance(v, (int, float)) and k != "fraction"]
-    xs = [0.0] + [p["fraction"] for p in points]
-    result = {"fraction": fraction}
-    for key in keys:
-        ys = [0.0] + [p[key] for p in points]
-        result[key] = float(np.interp(fraction, xs, ys))
-    return result

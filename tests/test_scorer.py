@@ -67,3 +67,72 @@ def test_benchmark_scoring_reports_throughput_and_latency(uplift_frame):
     stats = benchmark_scoring(LinearModel(), uplift_frame(2000, seed=3), batch_size=500, n_batches=8)
     assert stats["events_per_sec"] > 0
     assert 0 <= stats["p95_batch_ms"] and stats["p95_event_ms"] >= stats["p95_batch_ms"] / 500
+
+
+def _drifting_events(uplift_frame, n=1200, shift=4.0):
+    from streaming.events import inject_drift
+
+    exposures, outcomes = build_events(uplift_frame(n, seed=21), seed=1)
+    exposures = inject_drift(exposures, "f0", shift=shift, after_fraction=0.5)
+    return [e for e in merged_events(exposures, outcomes) if e["topic"] == "exposures"]
+
+
+def test_run_scorer_publishes_drift_alert_within_two_windows_of_the_shift(uplift_frame):
+    from streaming.drift import DriftMonitor
+    from streaming.scorer import DRIFT_TOPIC
+
+    events = _drifting_events(uplift_frame)
+    reference = uplift_frame(5000, seed=22)[[f"f{i}" for i in range(12)]]
+    monitor = DriftMonitor(reference, list(reference.columns), window_size=200)
+    sink = ListSink()
+    run_scorer(FakeConsumer(events, 100), sink, LinearModel(), 0.0, batch_size=100, max_idle_polls=1, drift_monitor=monitor)
+    alerts = [v for topic, _, v in sink.messages if topic == DRIFT_TOPIC]
+    assert alerts, "shift was never flagged"
+    assert all(a["features"] == ["f0"] for a in alerts)
+    assert all(a["n_processed"] > 600 for a in alerts)  # nothing flagged before the shift starts
+    assert alerts[0]["n_processed"] <= 600 + 2 * 200  # flagged within two windows
+
+
+def test_run_scorer_raises_no_drift_alert_on_a_stationary_stream(uplift_frame):
+    from streaming.drift import DriftMonitor
+    from streaming.scorer import DRIFT_TOPIC
+
+    events = _drifting_events(uplift_frame, shift=0.0)
+    reference = uplift_frame(5000, seed=22)[[f"f{i}" for i in range(12)]]
+    monitor = DriftMonitor(reference, list(reference.columns), window_size=200)
+    sink = ListSink()
+    run_scorer(FakeConsumer(events, 100), sink, LinearModel(), 0.0, batch_size=100, max_idle_polls=1, drift_monitor=monitor)
+    assert not [1 for topic, _, _ in sink.messages if topic == DRIFT_TOPIC]
+
+
+def test_decode_message_skips_poison_messages():
+    from streaming.scorer import decode_message
+
+    assert decode_message("exposures", b"7", b'{"user_id": 7}') == {
+        "topic": "exposures", "key": "7", "value": {"user_id": 7}}
+    assert decode_message("exposures", None, b'{"user_id": 7}')["key"] == ""
+    assert decode_message("exposures", b"7", b"not json") is None
+    assert decode_message("exposures", b"7", None) is None
+
+
+def test_run_scorer_flushes_the_sink_before_committing_offsets(exposure_events):
+    calls = []
+
+    class Sink(ListSink):
+        def flush(self):
+            calls.append("flush")
+
+    class CommittingConsumer(FakeConsumer):
+        def commit(self):
+            calls.append("commit")
+
+    run_scorer(CommittingConsumer(exposure_events, 100), Sink(), LinearModel(), 0.0, batch_size=100, max_idle_polls=1)
+    batches = -(-len(exposure_events) // 100)
+    assert calls == ["flush", "commit"] * batches
+
+
+def test_postgres_sink_is_idempotent_on_replayed_decisions():
+    from streaming.scorer import PostgresDecisionSink
+
+    assert "PRIMARY KEY" in PostgresDecisionSink.DDL
+    assert "ON CONFLICT (user_id) DO NOTHING" in PostgresDecisionSink.INSERT
