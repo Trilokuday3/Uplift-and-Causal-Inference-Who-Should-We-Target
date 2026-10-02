@@ -7,6 +7,10 @@ MODELS_DIR ?= models
 KAFKA ?= localhost:29092
 EPS ?= 500
 LIMIT ?= 200000
+SAMPLE_SIZE ?= 500000
+TEST_SAMPLE_SIZE ?= 1000000
+N_TRIALS ?= 5
+N_BOOT ?= 100
 
 # One-time setup: pip install -r requirements.txt && pip install -e .
 
@@ -16,8 +20,10 @@ data:
 ab-test:
 	python -m uplift.ab_test --input-dir $(PROCESSED_DIR) --output docs/ab_test_results.json
 
+## Defaults reproduce the run reported in README.md; override e.g. `make train SAMPLE_SIZE=200000` for a quick local run.
 train:
-	python -m uplift.train --input-dir $(PROCESSED_DIR) --output docs/uplift_results.json --artifacts-dir $(MODELS_DIR)
+	python -m uplift.train --input-dir $(PROCESSED_DIR) --output docs/uplift_results.json --artifacts-dir $(MODELS_DIR) \
+		--sample-size $(SAMPLE_SIZE) --test-sample-size $(TEST_SAMPLE_SIZE) --n-trials $(N_TRIALS) --n-boot $(N_BOOT)
 
 policy:
 	python -m uplift.policy --artifacts-dir $(MODELS_DIR) --output docs/policy_results.json
