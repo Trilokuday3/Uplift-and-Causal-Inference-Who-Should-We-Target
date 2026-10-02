@@ -1,43 +1,72 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from uplift.constants import FEATURE_COLS
 from uplift.policy import interpolate_curve
 
 
-class Features(BaseModel):
-    """Exactly the model's features. Extra fields (e.g. `exposure`, `visit`) are rejected."""
+def _drop_non_finite(value):
+    """Replace NaN/Infinity with None so Starlette's strict JSON encoder doesn't crash on them."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _drop_non_finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_drop_non_finite(v) for v in value]
+    return value
 
-    model_config = ConfigDict(extra="forbid")
-    f0: float
-    f1: float
-    f2: float
-    f3: float
-    f4: float
-    f5: float
-    f6: float
-    f7: float
-    f8: float
-    f9: float
-    f10: float
-    f11: float
+
+Number = Annotated[float, Field(allow_inf_nan=False)]
+
+
+class Features(BaseModel):
+    """Exactly the model's features, as real numbers. Extra fields (e.g. `exposure`, `visit`),
+    booleans, strings and NaN/inf are rejected."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    f0: Number
+    f1: Number
+    f2: Number
+    f3: Number
+    f4: Number
+    f5: Number
+    f6: Number
+    f7: Number
+    f8: Number
+    f9: Number
+    f10: Number
+    f11: Number
 
 
 class ScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     features: Features
 
 
 def create_app(model=None, threshold: float | None = None, policy: dict | None = None, model_name: str = "unknown") -> FastAPI:
     app = FastAPI(title="Uplift targeting API", version="0.1.0")
+
+    @app.exception_handler(RequestValidationError)
+    async def on_validation_error(request: Request, exc: RequestValidationError):
+        # A rejected NaN/Infinity in the request body ends up echoed into exc.errors() as
+        # a raw float; Starlette's JSONResponse rejects non-finite floats outright, which
+        # would otherwise turn a 422 into an unhandled 500.
+        content = _drop_non_finite(jsonable_encoder({"detail": exc.errors()}))
+        return JSONResponse(status_code=422, content=content)
 
     @app.get("/health")
     def health():
@@ -72,7 +101,8 @@ def create_app_from_env() -> FastAPI:
     model = threshold = None
     name = "unknown"
     has_model = (artifacts / "best_model.joblib").exists() or os.environ.get("MODEL_URI")
-    if has_model and (artifacts / "model_meta.json").exists():
+    ready = (artifacts / "model_meta.json").exists() and (artifacts / "test_scores.parquet").exists()
+    if has_model and ready:
         meta = json.loads((artifacts / "model_meta.json").read_text())
         name = meta["model_name"]
         model_uri = os.environ.get("MODEL_URI")

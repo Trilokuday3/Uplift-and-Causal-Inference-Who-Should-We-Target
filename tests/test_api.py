@@ -72,3 +72,28 @@ def test_endpoints_return_503_when_nothing_is_loaded():
     assert empty.get("/health").json()["status"] == "degraded"
     assert empty.post("/score", json={"features": FEATURES}).status_code == 503
     assert empty.get("/policy", params={"budget": 0.3}).status_code == 503
+
+
+def test_score_rejects_extra_top_level_fields_and_non_numeric_values(client):
+    good = {"features": FEATURES}
+    assert client.post("/score", json={**good, "exposure": 1}).status_code == 422
+    assert client.post("/score", json={"features": {**FEATURES, "f0": True}}).status_code == 422
+    assert client.post("/score", json={"features": {**FEATURES, "f0": "2"}}).status_code == 422
+    assert client.post("/score", json={"features": {**FEATURES, "f0": 2}}).status_code == 200  # ints are fine
+    raw = '{"features": {' + ", ".join(f'"f{i}": {"NaN" if i == 0 else 0.0}' for i in range(12)) + "}}"
+    assert client.post("/score", content=raw, headers={"Content-Type": "application/json"}).status_code == 422
+
+
+def test_create_app_from_env_degrades_instead_of_crashing_when_scores_are_missing(tmp_path, monkeypatch):
+    import json
+
+    import joblib
+
+    from api.main import create_app_from_env
+
+    (tmp_path / "model_meta.json").write_text(json.dumps({"model_name": "fake"}))
+    joblib.dump({"not": "a real model"}, tmp_path / "best_model.joblib")
+    monkeypatch.setenv("ARTIFACTS_DIR", str(tmp_path))
+    monkeypatch.setenv("POLICY_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.delenv("MODEL_URI", raising=False)
+    assert TestClient(create_app_from_env()).get("/health").json()["status"] == "degraded"
